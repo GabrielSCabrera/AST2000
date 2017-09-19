@@ -13,7 +13,7 @@ Ulrik 82275
 Gabriel 45355
 Anders 28631'''
 
-class Planet(object):
+class Planet_OLD(object):                           #TO BE REMOVED
 
     def __init__(self, name = None, seed = None, a = None, e = None, radius = None,
     omega = None, psi = None, mass = None, period = None, x0 = None, y0 = None,
@@ -104,9 +104,242 @@ class Planet(object):
         plt.title("Orbit of Planet %s"%(self.planet_name))
         plt.show()
 
+class Planet(object):
+
+    def __init__(self, name, dt = 6e-7, frames_max = 10000, seed = 45355):
+
+        self.numerical_complete = False
+        self.analytical_complete = False
+        self.seed = seed
+        self.sun = fx.get_sun_data(seed = self.seed)
+        planet_data, planet_order = fx.get_planet_data(seed = self.seed, return_order = True)
+
+        name = name.lower()
+        if name in planet_data:
+            for prop, val in planet_data[name].iteritems():
+                self.__dict__[prop] = val
+                self.index = planet_order.index(name)
+                if len(name) > 1:
+                    self.name = name[0].upper() + name[1:]
+                else:
+                    self.name = name.upper()
+        else:
+            fx.error(NameError, 'Invalid Planet Name')
+
+        #CONSTANTS
+        self.G = 4.*np.pi**2.
+
+        #CALCULATED DATA
+        self.b = self.a*np.sqrt(1 - self.e**2)
+        self.mu_hat = (self.mass*self.sun['mass'])/(self.mass+self.sun['mass'])
+        self.T = 2.*np.pi*np.sqrt((self.a**3.)/(self.G*self.sun['mass']))
+
+        #INTEGRATION PARAMETERS
+        self.dt = dt
+        self.frames = min(frames_max, int(self.T/self.dt))
+        self.final_dt = float(self.T)/float(self.frames)
+
+    #CALCULATIONS
+
+    def get_analytical_position(self, theta):
+        p = self.a*(1. - self.e**2.)
+        r = p/(1. + self.e*np.cos(theta-self.omega))
+        ur = np.array([-np.cos(theta-(self.omega-self.psi)), -np.sin(theta-(self.omega-self.psi))])
+        return np.abs(r)*ur
+
+    def get_analytical_orbit(self):
+        theta = np.linspace(0, 2.*np.pi, self.frames)
+        x = self.get_analytical_position(theta)
+        self.analytical = {'theta': theta, 'x': x}
+        self.analytical_complete = True
+
+    def get_numerical_orbit(self):
+        #USES LEAPFROG INTEGRATION
+        t = np.linspace(0., self.T, self.frames)
+        x = np.zeros((self.frames, 2))
+        v = x.copy()
+        a = x.copy()
+
+        def get_acceleration(r):
+            r_magnitude = LA.norm(r)
+            ur = np.divide(r, r_magnitude)
+            a = -(self.G*self.sun['mass'])/(r_magnitude**2.)
+            return a*ur
+
+        x[0,0], x[0,1] = self.x0, self.y0
+        v[0,0], v[0,1] = self.vx0, self.vy0
+        a[0] = get_acceleration(x[0])
+        t_now = self.dt
+        x_now = x[0].copy()
+        v_now = v[0].copy() + 0.5*get_acceleration(x_now)*self.dt
+        a_now = a[0].copy()
+        save_index = 1
+        i = 0
+
+        while t_now <= self.T + self.dt:
+            a_now = get_acceleration(x_now)
+            v_now += a_now*self.dt
+            x_now += v_now*self.dt
+
+            if t_now >= t[save_index]:
+                x[save_index] = x_now
+                v[save_index] = v_now
+                a[save_index] = a_now
+                save_index += 1
+            t_now += self.dt
+            i += 1
+
+        self.numerical = {'t': t, 'x': x, 'v': v, 'a': a}
+        self.integration_complete = True
+
+    def get_area(self, t0 = 0, dt = None):
+        self._check_numerical()
+        t0 = t0%self.T
+
+        con1 = t0 - 0.5*self.final_dt < self.numerical['t']
+        con2 = t0 + 0.5*self.final_dt > self.numerical['t']
+        t0_index = np.where(con1 & con2)[0][0]
+
+        if dt == None:
+            dt = self.T-self.final_dt
+
+        t1 = t0 + dt
+        if dt > self.T:
+            fx.error(ValueError, 'Cannot calculate area over a time larger than the orbital period')
+        elif dt < self.final_dt:
+            return 0
+        elif t1 > self.T:
+            dt2 = t1 - self.T
+            t1 = self.T
+            A2 = self.get_area(t0 = 0, dt = dt2)
+        else:
+            A2 = 0
+
+        con3 = t1 - 0.5*self.final_dt < self.numerical['t']
+        con4 = t1 + 0.5*self.final_dt > self.numerical['t']
+        t1_index = np.where(con3 & con4)[0][0]
+
+        x_slice = self.numerical['x'][t0_index:t1_index]
+        r = LA.norm(x_slice[:-1], axis = 1)
+        arc_lengths = LA.norm(np.diff(x_slice, axis = 0), axis = 1)
+
+        A1 = np.sum(np.multiply(r, arc_lengths))
+        return A1 + A2
+    #TESTS
+
+    def _check_numerical(self):
+        if self.numerical_complete == False:
+            self.get_numerical_orbit()
+
+    def _check_analytical(self):
+        if self.analytical_complete == False:
+            self.get_analytical_orbit()
+
+    #DATA VISUALIZATION
+
+    def plot(self, analytical = True, numerical = False, axes = True):
+        legend = ['Sun']
+        sun = plt.Circle(xy = (0.,0.), radius = self.sun['radius']*6.68459e-9,
+        color = 'y')
+        fig, ax = plt.subplots()
+        ax.set(aspect=1)
+        ax.add_artist(sun)
+        plt.plot(0,0,'oy',ms=1)
+        if analytical == True:
+            self._check_analytical()
+            legend.append('Analytical Orbit')
+            x_analytical = self.analytical['x']
+            plt.plot(x_analytical[0], x_analytical[1], '-r')
+
+        if numerical == True:
+            self._check_numerical()
+            legend.append('Numerical Orbit')
+            x_numerical = self.numerical['x']
+            plt.plot(x_numerical[:,0], x_numerical[:,1], '-b')
+
+        if axes == True:
+            x_a = [0., (1.+self.e)*self.a*np.cos(self.psi)]
+            y_a = [0., (1.+self.e)*self.a*np.sin(self.psi)]
+            x_b = [0., -(1.-self.e)*self.b*np.cos(self.psi)]
+            y_b = [0., -(1.-self.e)*self.b*np.sin(self.psi)]
+            plt.plot(x_a, y_a, '-g')
+            plt.plot(x_b, y_b, '-m')
+            legend += ['Semi-Major Axis', 'Semi-Minor Axis']
+
+        plt.title('The Orbit of Planet %s'%(self.name))
+        plt.legend(legend)
+        plt.xlabel('x in AU')
+        plt.ylabel('y in AU')
+        plt.show()
+
+    def __str__(self):
+        properties = ['a', 'e', 'radius', 'omega', 'psi', 'mass', 'period', 'x0', 'y0',
+        'vx0', 'vy0', 'rho0']
+        string = 'Seed: %d\nPlanet Name: %s\nPlanet Index: %d'%(self.seed, self.name, self.index)
+        string += '\n\nOrbital Parameters:'
+        string += '\n\tSemi-Major Axis: %gAU\n\tSemi-Minor Axis: %gAU'%(self.a, self.b)
+        string += '\n\tEccentricity: %g\n\tAngle of Semi-Major Axis: %grad'%(self.e, self.psi)
+        string += '\n\tStarting Angle of Orbit: %grad'%(self.omega)
+        string += '\n\tOrbital Period: %gYr'%(self.T)
+        string += '\n\tStarting Coordinates (x,y): (%g, %g) AU'%(self.x0, self.y0)
+        string += '\n\tStarting Velocity (vx,vy): (%g, %g) AU/Yr'%(self.vx0, self.vy0)
+        string += ', (%g,%g)km/s'%(self.convert_AU_per_year(self.vx0, 'km/s'),
+        self.convert_AU_per_year(self.vy0, 'km/s'))
+        string += '\n\nPlanet Properties:'
+        string += '\n\tRadius: %gkm, %g Earth Radii'\
+        %(self.radius, self.radius/6371.)
+        string += '\n\tRotational Period: %g Days, %g Hours'%(self.period, self.period*24.)
+        string += '\n\tMass: %g Solar Masses, %g Earth Masses, %gkg'\
+        %(self.mass, self.convert_solar_masses(self.mass, 'earth masses'),
+        self.convert_solar_masses(self.mass))
+        string += '\n\tAtmospheric Density at Surface: %gkg/m^3'%(self.rho0)
+        return string
+
+    #MISC FUNCTIONS
+
+    def convert_AU(self, val, convert_to = 'm'):
+        if convert_to == 'm':
+            return 1.496e11*val
+        elif convert_to == 'earth radii':
+            return val/4.25875e-5
+        elif convert_to == 'solar radii':
+            return val/215.
+        else:
+            fx.error(KeyError, 'Invalid Conversion Unit <%s>'%(convert_to))
+
+    def convert_AU_per_year(self, val, convert_to = 'm/s'):
+        if convert_to == 'm/s':
+            return val*4743.72
+        elif convert_to == 'km/h':
+            return val*17066.0582
+        elif convert_to == 'km/s':
+            return val*4.74372
+        else:
+            fx.error(KeyError, 'Invalid Conversion Unit <%s>'%(convert_to))
+
+    def convert_year(self, val, convert_to = 's'):
+        if convert_to == 'seconds':
+            return val*3.154e+7
+        elif convert_to == 'minutes':
+            return val*525600.
+        elif convert_to == 'hours':
+            return val*8760.
+        elif convert_to == 'days':
+            return val*365.2422
+        else:
+            fx.error(KeyError, 'Invalid Conversion Unit <%s>'%(convert_to))
+
+    def convert_solar_masses(self, val, convert_to = 'kg'):
+        if convert_to == 'kg':
+            return val*1.99e30
+        elif convert_to == 'earth masses':
+            return val*332946.
+        else:
+            fx.error(KeyError, 'Invalid Conversion Unit <%s>'%(convert_to))
+
 class Orbits(object):
 
-    def __init__(self, seed = None, dt = 6e-7, T = 3, frames = 10000):
+    def __init__(self, seed = 45355, dt = 6e-7, T = 3, frames = 10000):
 
         if frames > T/dt:
             fx.error(ValueError, 'Cannot save more frames than number of steps')
@@ -175,7 +408,7 @@ class Orbits(object):
         d = self.planet_data[name]
         p = d['a']*(1. - d['e']**2.)
         r = p/(1. + d['e']*np.cos(theta-d['omega']))
-        ur = np.array([-np.cos(theta-(d['omega']-d['psi'])), np.sin((d['omega']-d['psi'])-theta)])
+        ur = np.array([-np.cos(theta-(d['omega']-d['psi'])), -np.sin(theta-(d['omega']-d['psi']))])
         return np.abs(r)*ur
 
     def get_area(self, t0, dt, name):
@@ -302,7 +535,6 @@ class Orbits(object):
         print x.shape
         self.system.check_planet_positions(x, self.T, self.frames/self.T)
 
-
 class Body(object):
 
     def __init__(self, mass, cs_area):
@@ -362,32 +594,6 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    '''a = Planet(name = 'Sarplo')
-    a.plot_orbit()
-    t,x,v,a = a.integrate_data_by_time(t = 3e7, dt = 1e1, f0 = np.pi/3)
-    plt.plot(x[:,0], x[:,1])
-    plt.axes().set_aspect(1)
-    axes = [1.2*np.min(x[:,0]),1.2*np.max(x[:,0]),1.2*np.min(x[:,1]),1.2*np.max(x[:,1])]
-    plt.axis(axes)
-    plt.show()'''
-    o = Orbits(dt = 1e-3, frames = 1000)
-    '''print o.extract_data(data = 'mass')
-    print 0.685770957613097/0.72518747670110884
-    print 6.39e23/5.972e24
-    print o.planet_data['jevelan']['period']
-    print o.planet_data['sarplo']['period']
-    print o.planet_names
-    o.plot()'''
-
-    '''for n,p in fx.get_planet_data(seed = 28631).iteritems():
-        print LA.norm(np.array([p['x0'],p['y0']])),
-    for n,p in fx.get_planet_data().iteritems():
-        print LA.norm(np.array([p['x0'],p['y0']]))'''
-
-    #print o.orbital_period()
-    #print o.sun_data['mass']
-    print o.get_area(t0 = 0.5, dt=0.5, name='bertela')
-    '''print o.extract_data('e')
-    print o.get_max('e')
-    print o.planet_names
-    o.plot_compare(planet='bertela')'''
+    a = Planet(name = 'Bertela', dt = 1e-4)
+    print a
+    print a.get_area(t0 = 0.4,dt = 0.3)-a.get_area(dt = 0.3)

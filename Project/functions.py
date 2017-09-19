@@ -102,9 +102,8 @@ Lars 78826
 Ulrik 82275
 Gabriel 45355'''
 
-def get_planet_data(seed = None, planet_names = None, return_order = False):
-    if seed == None:
-        seed = 45355
+def get_planet_data(seed = 45355, planet_names = None, return_order = False):
+    if seed == 45355:
         planet_names = ['sarplo', 'jevelan', 'calimno', 'sesena', 'corvee', 'bertela',
         'poppengo', 'trento']
         myStarSystem = AST2000SolarSystem(seed)
