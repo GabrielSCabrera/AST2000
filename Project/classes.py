@@ -20,7 +20,8 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
         self.numerical_complete = False
         self.analytical_complete = False
         self.seed = seed
-        self.sun = fx.get_sun_data(seed = self.seed)
+        np.random.seed(self.seed)
+        self.sun = Sun(seed = self.seed)
         planet_data, planet_order = fx.get_planet_data(seed = self.seed, return_order = True)
 
         name = name.lower()
@@ -40,8 +41,10 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
 
         #CALCULATED DATA
         self.b = self.a*np.sqrt(1 - self.e**2)
-        self.mu_hat = (self.mass*self.sun['mass'])/(self.mass+self.sun['mass'])
-        self.T = 2.*np.pi*np.sqrt((self.a**3.)/(self.G*self.sun['mass']))
+        self.mu_hat = (self.mass*self.sun.mass)/(self.mass+self.sun.mass)
+        self.T = 2.*np.pi*np.sqrt((self.a**3.)/(self.G*self.sun.mass))
+        self.F = self.sun.L/(4.*np.pi*(((1.+self.e)*self.a*1.496e11)**2.))
+        self.temperature = (self.F/self.sun.sigma)**0.25
 
         #INTEGRATION PARAMETERS
         self.dt = dt
@@ -79,7 +82,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
         def get_acceleration(r):
             r_magnitude = LA.norm(r)
             ur = np.divide(r, r_magnitude)
-            a = -(self.G*self.sun['mass'])/(r_magnitude**2.)
+            a = -(self.G*self.sun.mass)/(r_magnitude**2.)
             return a*ur
 
         x[0,0], x[0,1] = self.x0, self.y0
@@ -110,6 +113,54 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             self.numerical_complete = True
         else:
             return {'t': t, 'x': x, 'v': v, 'a': a}
+
+    def get_2_body_numerical_orbit(self, T = None, dt = None, frames = None):
+        if T == None:
+            T = self.T
+        dt = self.dt
+        frames = self.frames
+
+        t = np.linspace(0., T, frames)
+        x = np.zeros((frames, 2))
+        v = x.copy()
+        a = x.copy()
+
+        def get_acceleration(r):
+            r_magnitude = LA.norm(r)
+            ur = np.divide(r, r_magnitude)
+            a = -(self.G*self.sun.mass)/(r_magnitude**2.)
+            return a*ur
+
+        def get_sun_acceleration(r):
+            r_magnitude = LA.norm(r)
+            ur = np.divide(r, r_magnitude)
+            a = -(self.G*self.mass)/(r_magnitude**2.)
+            return a*ur
+
+        x[0,0], x[0,1] = self.x0, self.y0
+        v[0,0], v[0,1] = self.vx0, self.vy0
+        a[0] = get_acceleration(x[0])
+        t_now = dt
+        x_now = x[0].copy()
+        v_now = v[0].copy()
+        a_now = a[0].copy()
+        save_index = 1
+        i = 0
+
+        while t_now <= T + dt:
+            a_now = get_acceleration(x_now) - get_sun_acceleration(x_now)
+            v_now += a_now*dt
+            x_now += v_now*dt
+
+            if t_now >= t[save_index]:
+                x[save_index] = x_now
+                v[save_index] = v_now
+                a[save_index] = a_now
+                save_index += 1
+            t_now += dt
+            i += 1
+
+        return {'t': t, 'x': x, 'v': v, 'a': a}
 
     def get_area(self, t0 = 0, dt = None):
         self._check_numerical()
@@ -233,12 +284,16 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
 
     def plot(self, analytical = True, numerical = False, axes = True):
         legend = ['Sun']
-        sun = plt.Circle(xy = (0.,0.), radius = self.sun['radius']*6.68459e-9,
+        sun = plt.Circle(xy = (0.,0.), radius = self.sun.radius*6.68459e-9,
         color = 'y')
+        planet = plt.Circle(xy = (self.x0,self.y0), radius = self.radius*6.68459e-9,
+        color = 'k')
         fig, ax = plt.subplots()
         ax.set(aspect=1)
         ax.add_artist(sun)
+        ax.add_artist(planet)
         plt.plot(0,0,'oy',ms=1)
+
         if analytical == True:
             self._check_analytical()
             legend.append('Analytical Orbit')
@@ -264,6 +319,91 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
         plt.legend(legend)
         plt.xlabel('x in AU')
         plt.ylabel('y in AU')
+        plt.show()
+
+    def plot_2_body(self, T = None):
+        data = self.get_2_body_numerical_orbit()
+        t = data['t']
+        x, y = data['x'][:,0], data['x'][:,1]
+
+        legend = ['Sun']
+        sun = plt.Circle(xy = (0.,0.), radius = self.sun.radius*6.68459e-9,
+        color = 'y')
+        fig, ax = plt.subplots()
+        ax.set(aspect=1)
+        ax.add_artist(sun)
+        plt.plot(0,0,'oy',ms=1)
+        plt.plot(x, y)
+        plt.title('The Orbit of Planet %s'%(self.name))
+        plt.legend(legend)
+        plt.xlabel('x in AU')
+        plt.ylabel('y in AU')
+        plt.show()
+
+    def plot_velocity_curve(self, peculiar_velocity = (0,0), i = np.pi/2.,
+    two_body = False, T = None, noise = True):
+        if two_body == False:
+            self._check_numerical()
+            t = self.numerical['t']
+            v = self.numerical['v']
+        else:
+            data = self.get_2_body_numerical_orbit(T = T)
+            t = data['t']
+            v = data['v']
+        if not isinstance(peculiar_velocity, np.ndarray):
+            peculiar_velocity = np.array(peculiar_velocity)
+        v_max = np.max(LA.norm(v))*np.sin(i)
+        v = v_max*np.cos((2*np.pi*t)/self.T) + LA.norm(peculiar_velocity)
+
+        if noise == True:
+            noisiness = np.random.normal(loc = 0.0, scale = v_max/5., size = len(t))
+            v += noisiness
+
+        plt.plot(t,v)
+        plt.title('Velocity Curve of a System with an Inclination of %.2g rads\
+        \n and a Peculiar Velocity of (%.2g,%.2g) AU/yr'%(i, peculiar_velocity[0],
+        peculiar_velocity[1]))
+        plt.xlabel('Observed Velocity (AU/Yr)')
+        plt.ylabel('Time (Yr)')
+        plt.axis([t[0], t[-1], min(v) - 0.1*abs(max(v) - min(v)),
+        max(v) + 0.1*abs(max(v) - min(v))])
+        plt.show()
+
+    def plot_light_curve(self, T = None, steps = 1e3, noise = True):
+
+        sun_area = np.pi*(self.sun.radius**2.)
+        planet_area = np.pi*(self.radius**2.)
+        max_flux = sun_area
+        min_flux = max_flux - planet_area
+        max_flux /= sun_area
+        min_flux /= sun_area
+        d_flux = max_flux - min_flux
+        v = LA.norm(np.array([self.vx0, self.vy0]))
+        cross_time = 2.*6.68459e-9*self.radius/v
+        min_time = 2.*6.68459e-9*self.sun.radius/v - cross_time
+        t_tot = 2.*cross_time + 3.*min_time
+        dt = t_tot/steps
+        ct_frames = cross_time/dt
+        mt_frames = min_time/dt
+
+        ct_x1 = np.linspace(min_flux, max_flux, ct_frames)
+        ct_x0 = np.copy(ct_x1)[::-1]
+        mt_x = min_flux*np.ones(mt_frames)
+        x0 = np.ones_like(mt_x)
+
+        new = np.concatenate((x0, ct_x0, mt_x, ct_x1, x0))
+
+        if noise == True:
+            noisiness = np.random.normal(loc = 0.0, scale = 0.2, size = len(new))
+            new += noisiness
+
+        t = 8760.*np.linspace(0., t_tot, len(new))
+        plt.plot(t, new)
+        plt.title('Light Curve of Planet %s Eclipsing its Sun'%(self.name))
+        plt.xlabel('Time in Hours')
+        plt.ylabel('Relative Flux')
+        plt.axis([t[0], t[-1], min(new) - 0.1*abs(max(new) - min(new)),
+        max(new) + 0.1*abs(max(new) - min(new))])
         plt.show()
 
     def __str__(self):
@@ -337,7 +477,7 @@ class Solar_System(object):
         self.numerical_complete = False
         self.analytical_complete = False
         self.seed = seed
-        self.sun = fx.get_sun_data(seed = self.seed)
+        self.sun = Sun(seed = seed)
         planet_data, self.planet_order = fx.get_planet_data(seed = self.seed, return_order = True)
         self.planets = {}
 
@@ -393,7 +533,7 @@ class Solar_System(object):
 
     def plot(self, T = None, dt = None, frames_max = None):
         legend = ['Sun']
-        sun = plt.Circle(xy = (0.,0.), radius = self.sun['radius']*6.68459e-9,
+        sun = plt.Circle(xy = (0.,0.), radius = self.sun.radius*6.68459e-9,
         color = 'y')
         fig, ax = plt.subplots()
         ax.set(aspect=1)
@@ -416,6 +556,9 @@ class Solar_System(object):
                 x_numerical = orbits[p]['x']
                 plt.plot(x_numerical[:,0], x_numerical[:,1])
                 legend.append(self.planets[p].name)
+        for p,d in self.planets.iteritems():
+            planet = plt.Circle(xy = (d.x0,d.y0), radius = d.radius*6.68459e-9)
+            ax.add_artist(planet)
         plt.title('The Orbits of Solar System %d'%(self.seed))
         plt.legend(legend)
         plt.xlabel('x in AU')
@@ -501,21 +644,36 @@ class Solar_System(object):
         frames = x.shape[2]
         self.system.check_planet_positions(x, t[-1], frames/t[-1])
 
-class Body(object):
+class Sun(object):
 
-    def __init__(self, mass, cs_area):
+    def __init__(self, seed = 45355):
+        data = fx.get_sun_data(seed = seed)
+        self.mass = data['mass']
+        self.radius = data['radius']
+        self.temperature = data['temperature']
+        self.sigma = 5.6703e-8
+        self.L = self.sigma*(self.temperature**4.)*(4.*np.pi*((self.radius*1e3)**2.))
+
+class Satellite(object):
+
+    def __init__(self, mass = 1100., cs_area = 15.):
         self.mass = mass
         self.cs_area = cs_area
 
-class Satellite(Body):
+class Lander(object):
 
-    def __init__(self, mass = 1100., cs_area = 15.):
-        Body.__init__(self, mass = mass, cs_area = cs_area)
+    def __init__(self, planet, mass = 90., cs_area = 6.2, watts = 40.,
+    panel_efficiency = .12, seed = 45355):
+        self.seed = seed
+        self.mass = mass
+        self.cs_area = cs_area
+        self.watts = watts
+        self.panel_efficiency = panel_efficiency
+        self.sun = Sun(seed = self.seed)
+        self.planet = Planet(name = planet, seed = self.seed)
 
-class Lander(Body):
-
-    def __init__(self, mass = 90., cs_area = 6.2):
-        Body.__init__(self, mass = mass, cs_area = cs_area)
+    def get_min_panel_size(self):
+        return self.watts/(self.planet.F*self.panel_efficiency)
 
 class Gaussian(object):
 
@@ -560,5 +718,12 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    s = Solar_System(dt = 5e-7)
-    s.plot()
+    s = Solar_System(dt = 1e-4)
+    #calimno
+    '''T = s.planets['sesena'].T
+    s.planets['calimno'].plot_velocity_curve(two_body = True, T = T,
+    peculiar_velocity = (200,300), noise = True)'''
+    #print s.planets[s.get_max('radius').keys()[0]].plot_light_curve()
+    l = Lander(planet = 'jevelan')
+    print l.get_min_panel_size()
+    print s.planets['sarplo'].temperature

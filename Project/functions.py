@@ -5,9 +5,7 @@ import matplotlib.pylab as plt
 import matplotlib.pyplot as plt2
 import matplotlib.patches as Patches
 import matplotlib.axes as Axes
-import math
-import string
-from collections import OrderedDict as OD
+import math, itertools, string
 
 '''[2] USEFUL CONSTANTS'''
 
@@ -15,7 +13,7 @@ types = {'numbers':(int, float, long),
          'text':(str,)}
 inf_str = ('inf','infty','infinity')
 
-'''[3] USEFUL LOCAL FUNCTIONS'''
+'''[3] USEFUL FUNCTIONS'''
 
 def error(errortype = None, msg = None):
     if errortype == None and msg == None:
@@ -51,6 +49,65 @@ def solve_cubic_polynomial(a, b, c, d):
 
     x0 = (q + complex_check_1**0.5)**(1./3.) + (q - complex_check_2**0.5)**(1./3.)
 
+def minimize_function(f, steps, **kwargs):
+    '''<f> should be a function with N arguments, <kwargs> should be N arguments
+    each with a min, max value as tuple (like: a = (amin,amax), b = (bmin, bmax)
+    , ...) to check between, with each argument being one of the arguments in
+    v_real. <steps> should be the number of values to check for between ARGmin,
+    and ARGmax.  If several values give a lower combo, this function will only
+    return the first combo it finds that matches this condition.'''
+
+    dict_order = []
+    iter_list = []
+    for key, val in kwargs.iteritems():
+        dict_order.append(key)
+        iter_list.append(list(np.linspace(val[0], val[1], steps)))
+    lowest_value = None
+    best_combo = None
+    for i in itertools.product(*iter_list):
+        test_args = dict(itertools.izip(dict_order, i))
+        new_value = v_real(**test_args)
+        if lowest_value == None or new_value < lowest_value:
+            lowest_value = new_value
+            best_combo = test_args
+    return lowest_value, best_combo
+
+def chi_squared(y, y_real, x):
+    '''Argument <y> should be a 1D array of length N. <y_real> should be a 1D
+    array of length N that contains all the precalculated y_real(x) values'''
+
+    sigma_squared = np.power(y - y_real, 2.)
+
+    if len(sigma_squared) != len(y) or len(y_real) != len(y):
+        error(IndexError, "All arrays passed to function <chi_squared> must be \
+        of equal length")
+
+    return np.sum(np.divide(np.power(y - y_real, 2.), sigma_squared))
+
+def minimize_chi_squared(y, y_real, x, steps, **kwargs):
+    '''Argument <y> should be a 1D array of length M with noisy values. <y_real>
+    should be a function with N arguments, <kwargs> should be N arguments each
+    with a min, max value as tuple (like: a = (amin,amax), b = (bmin, bmax), ...)
+    to check between, with each argument being one of the arguments in <y_real>.
+    <steps> should be the number of values to check for between ARGmin, and
+    ARGmax.  If several values give a lower combo, this function will only return
+    the first combo it finds that matches this condition. <x> should be an array
+    of length M that represents all the x-values.'''
+
+    dict_order = []
+    iter_list = []
+    for key, val in kwargs.iteritems():
+        dict_order.append(key)
+        iter_list.append(list(np.linspace(val[0], val[1], steps)))
+    lowest_value = None
+    best_combo = None
+    for i in itertools.product(*iter_list):
+        test_args = dict(itertools.izip(dict_order, i))
+        new_value = chi_squared(y = y, y_real = y_real(x = x, **test_args))
+        if lowest_value == None or new_value < lowest_value:
+            lowest_value = new_value
+            best_combo = test_args
+    return lowest_value, best_combo
 
 '''[5] INTEGRATION FUNCTIONS'''
 
@@ -132,4 +189,10 @@ def get_sun_data(seed = None):
     return data_dict
 
 if __name__ == '__main__':
-    pass
+    def f(a,b,c):
+        return (3*a*(b+c)+2*(b-c))
+
+    x = np.linspace(0,10,11)
+    y = 3*x
+    lowest_value, best_combo = minimize_chi_squared(y = y, y_real=f, steps = 3,
+    x = x, a = [-5,5], b = [4,8], c = [1,3])
