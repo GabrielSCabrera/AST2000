@@ -6,6 +6,14 @@ import matplotlib.pyplot as plt2
 import matplotlib.patches as Patches
 import matplotlib.axes as Axes
 import math, itertools, string
+import numpy.linalg as LA
+try:
+    from numba import jit
+    import numba as nb
+    numba_exists = True
+except ImportError:
+    numba_exists = False
+    print "User should install module <Numba> for faster computations"
 
 '''[2] USEFUL CONSTANTS'''
 
@@ -66,7 +74,7 @@ def minimize_function(f, steps, **kwargs):
     best_combo = None
     for i in itertools.product(*iter_list):
         test_args = dict(itertools.izip(dict_order, i))
-        new_value = v_real(**test_args)
+        new_value = f(**test_args)
         if lowest_value == None or new_value < lowest_value:
             lowest_value = new_value
             best_combo = test_args
@@ -192,7 +200,8 @@ if __name__ == '__main__':
     def f(a,b,c):
         return (3*a*(b+c)+2*(b-c))
 
-    x = np.linspace(0,10,11)
+    print minimize_function(f = f, steps = 20, a = [-3,7], b = [-10,10], c = [30,50])
+    '''x = np.linspace(0,10,11)
     y = 3*x
     lowest_value, best_combo = minimize_chi_squared(y = y, y_real=f, steps = 3,
-    x = x, a = [-5,5], b = [4,8], c = [1,3])
+    x = x, a = [-5,5], b = [4,8], c = [1,3])'''

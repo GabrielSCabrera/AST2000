@@ -12,7 +12,6 @@ except ImportError:
     numba_exists = False
     print "User should install module <Numba> for faster computations"
 
-
 '''
 Steinn 52772
 Simen 47566
@@ -342,6 +341,10 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
                 v3 = np.zeros(len(v1)+len(v2))
                 v3[:len(v1)], v3[len(v1):] = v1, v2
                 return np.mean(v3)
+
+    def get_escape_velocity(self, h):
+        '''Takes and returns SI-units'''
+        return np.sqrt(2.*6.67408e-11*1.99e30*self.mass/(self.radius*1000. + h))
 
     #TESTS
 
@@ -718,7 +721,7 @@ class Solar_System(object):
 
     def confirm_planet_positions(self):
         '''For a dt = 5e-7, takes approximately 54s per planet, or 7.2 mins
-        With @jit, takes approximately 3.6s per planet, or 30s, 
+        With @jit, takes approximately 3.6s per planet, or 30s,
         The biggest relative deviation was detected at planet 7,
         which drifted 0.3873 percent from its actual position '''
         x, t = self.save_XML(save = True)
@@ -761,6 +764,8 @@ class Gas_Box(object):
         self.dt = self.time/self.steps        #Simulation Step Length in Seconds
         self.seed = seed
         np.random.seed(self.seed)
+        self.particles_per_second, self.force_per_second = self.burn()
+        self.box_mass = self.particles_per_second*self.m
 
     def burn(self):
         sigma = np.sqrt(self.k*self.T/self.m)
@@ -796,6 +801,136 @@ class Gas_Box(object):
             v = np.multiply(v, sign_matrix)
 
         return exiting/self.time, f/self.steps
+
+class Rocket(object):
+
+    def __init__(self, T = 1200., steps = 1e4, accuracy = 1e-3, planet = None,
+    gas_box = None, payload_mass = 1e3, seed = 45355):
+        self.seed = seed
+        sys.stdout.write('Simulating Gas Box')
+        sys.stdout.flush()
+        t0 = time.time()
+        if isinstance(gas_box, Gas_Box):
+            self.gas_box = gas_box
+        elif gas_box == None:
+            self.gas_box = Gas_Box(seed = self.seed)
+        else:
+            fx._error(TypeError, 'Argument <gas_box> must be of type <Gas_Box>')
+        t1 = time.time()
+        print ' - %.2fs'%(t1-t0)
+        sys.stdout.write('Initializing Planet and Variables')
+        sys.stdout.flush()
+        if isinstance(planet, Planet):
+            self.planet = planet
+        elif planet == None:
+            self.planet = Planet(name = 'Sarplo', seed = self.seed)
+        self.box_mass = self.gas_box.box_mass
+        self.box_force = self.gas_box.force_per_second
+        self.escape_velocity_func = self.planet.get_escape_velocity
+        self.T = float(T)
+        self.steps = int(steps)
+        self.accuracy = float(accuracy)
+        self.payload_mass = float(payload_mass)
+        t2 = time.time()
+        print ' -  %.2fs'%(t2-t1)
+        sys.stdout.write('Determining Ideal Number of Chambers')
+        sys.stdout.flush()
+        self.chambers = self.get_gas_boxes_required()
+        t3 = time.time()
+        print ' -  %.2fs'%(t3-t2)
+
+    def get_gas_boxes_required(self):
+        payload_mass = self.payload_mass
+        steps = self.steps
+        T = self.T
+        box_mass = self.box_mass
+        F = np.array([0.,self.box_force])
+        escape_velocity = self.escape_velocity_func(0.)
+        if numba_exists == True:
+            @jit
+            def jit_integration(F, T, steps, box_mass, payload_mass, escape_velocity):
+                i = 1.
+                step = 1e10
+                v = 0
+                while abs(escape_velocity - v) > 1e-4:
+                    v = 0
+                    while v < escape_velocity:
+                        v_new = LA.norm(launch_rocket(F, T, steps, i, box_mass,
+                        payload_mass)[2][-1])
+                        if v_new > escape_velocity:
+                            break
+                        else:
+                            v = v_new
+                        i += step
+                    i -= step
+                    step /= 1e2
+                return i
+
+            @jit
+            def launch_rocket(F, T, steps, chambers, box_mass, payload_mass,
+            x0 = None, v0 = None):
+                if x0 == None:
+                    x0 = np.zeros(2)
+                if v0 == None:
+                    v0 = np.zeros(2)
+                dt = T/float(steps)
+                mass = (chambers*box_mass) + payload_mass
+                dm = chambers*box_mass*dt
+                F = chambers*F
+                x = np.zeros((steps, 2))
+                v = np.copy(x)
+                t = np.linspace(0, T, steps)
+                x[0] = x0
+                v[0] = v0
+                for i in range(int(steps)-1):
+                    mass -= dm
+                    a = F*dt*(1./mass)
+                    v[i+1] = v[i] + a*dt
+                    x[i+1] = x[i] + v[i+1]*dt
+                return t, x, v
+        else:
+
+            def jit_integration(F, T, steps, box_mass, payload_mass, escape_velocity):
+                i = 1.
+                step = 1e10
+                v = 0
+                while abs(escape_velocity - v) > 1e-4:
+                    v = 0
+                    while v < escape_velocity:
+                        v_new = LA.norm(launch_rocket(F, T, steps, i, box_mass,
+                        payload_mass)[2][-1])
+                        if v_new > escape_velocity:
+                            break
+                        else:
+                            v = v_new
+                        i += step
+                    i -= step
+                    step /= 1e2
+                return i
+
+            def launch_rocket(F, T, steps, chambers, box_mass, payload_mass,
+            x0 = None, v0 = None):
+                if x0 == None:
+                    x0 = np.zeros(2)
+                if v0 == None:
+                    v0 = np.zeros(2)
+                dt = T/float(steps)
+                mass = (chambers*box_mass) + payload_mass
+                dm = chambers*box_mass*dt
+                F = chambers*F
+                x = np.zeros((steps, 2))
+                v = np.copy(x)
+                t = np.linspace(0, T, steps)
+                x[0] = x0
+                v[0] = v0
+                for i in range(int(steps)-1):
+                    mass -= dm
+                    a = F*dt*(1./mass)
+                    v[i+1] = v[i] + a*dt
+                    x[i+1] = x[i] + v[i+1]*dt
+                return t, x, v
+        b = jit_integration(F, T, steps, box_mass, payload_mass, escape_velocity)
+        return b
 
 class Satellite(object):
 
@@ -861,5 +996,4 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    S = Solar_System()
-    S.confirm_planet_positions()
+    r = Rocket()
