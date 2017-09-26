@@ -7,10 +7,9 @@ import time, sys, os
 try:
     from numba import jit
     import numba as nb
-    numba_exists = True
 except ImportError:
-    numba_exists = False
-    print "User should install module <Numba> for faster computations"
+    string = "User must install module <numba> to use module <classes.py>"
+    fx.error(ImportError, string)
 
 '''
 Steinn 52772
@@ -45,6 +44,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
 
         #CONSTANTS
         self.G = 4.*np.pi**2.
+        self.G_SI = 6.67408e-11
 
         #CALCULATED DATA
         self.b = self.a*np.sqrt(1 - self.e**2)
@@ -82,71 +82,38 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             frames = self.frames
         x0, y0, vx0, vy0 = self.x0, self.y0, self.vx0, self.vy0
         G, sun_mass = self.G, self.sun.mass
-        if numba_exists == True:
-            @jit
-            def jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass):
-                t = np.linspace(0., T, frames)
-                x = np.zeros((frames, 2))
-                v = x.copy()
-                a = x.copy()
+        @jit
+        def jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass):
+            t = np.linspace(0., T, frames)
+            x = np.zeros((frames, 2))
+            v = x.copy()
+            a = x.copy()
 
-                x[0,0], x[0,1] = x0, y0
-                v[0,0], v[0,1] = vx0, vy0
-                r_magnitude = LA.norm(x[0])
-                ur = np.divide(x[0], r_magnitude)
-                a[0] = (-(G*sun_mass)/(r_magnitude**2.))*ur
-                t_now = dt
-                x_now = x[0].copy()
-                v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
-                a_now = a[0].copy()
-                save_index = 1
+            x[0,0], x[0,1] = x0, y0
+            v[0,0], v[0,1] = vx0, vy0
+            r_magnitude = LA.norm(x[0])
+            ur = np.divide(x[0], r_magnitude)
+            a[0] = (-(G*sun_mass)/(r_magnitude**2.))*ur
+            t_now = dt
+            x_now = x[0].copy()
+            v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
+            a_now = a[0].copy()
+            save_index = 1
 
-                while t_now <= T + dt:
-                    r_magnitude = LA.norm(x_now)
-                    ur = np.divide(x_now, r_magnitude)
-                    a_now = (-(G*sun_mass)/(r_magnitude**2.))*ur
-                    v_now += a_now*dt
-                    x_now += v_now*dt
+            while t_now <= T + dt:
+                r_magnitude = LA.norm(x_now)
+                ur = np.divide(x_now, r_magnitude)
+                a_now = (-(G*sun_mass)/(r_magnitude**2.))*ur
+                v_now += a_now*dt
+                x_now += v_now*dt
 
-                    if t_now >= t[save_index]:
-                        x[save_index] = x_now
-                        v[save_index] = v_now
-                        a[save_index] = a_now
-                        save_index += 1
-                    t_now += dt
-                return t, x, v, a
-        else:
-            def jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass):
-                t = np.linspace(0., T, frames)
-                x = np.zeros((frames, 2))
-                v = x.copy()
-                a = x.copy()
-
-                x[0,0], x[0,1] = x0, y0
-                v[0,0], v[0,1] = vx0, vy0
-                r_magnitude = LA.norm(x[0])
-                ur = np.divide(x[0], r_magnitude)
-                a[0] = (-(G*sun_mass)/(r_magnitude**2.))*ur
-                t_now = dt
-                x_now = x[0].copy()
-                v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
-                a_now = a[0].copy()
-                save_index = 1
-
-                while t_now <= T + dt:
-                    r_magnitude = LA.norm(x_now)
-                    ur = np.divide(x_now, r_magnitude)
-                    a_now = (-(G*sun_mass)/(r_magnitude**2.))*ur
-                    v_now += a_now*dt
-                    x_now += v_now*dt
-
-                    if t_now >= t[save_index]:
-                        x[save_index] = x_now
-                        v[save_index] = v_now
-                        a[save_index] = a_now
-                        save_index += 1
-                    t_now += dt
-                return t, x, v, a
+                if t_now >= t[save_index]:
+                    x[save_index] = x_now
+                    v[save_index] = v_now
+                    a[save_index] = a_now
+                    save_index += 1
+                t_now += dt
+            return t, x, v, a
 
         t, x, v, a = jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass)
 
@@ -165,71 +132,37 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             frames = self.frames
         x0, y0, vx0, vy0 = self.x0, self.y0, self.vx0, self.vy0
         G, sun_mass, mass = self.G, self.sun.mass, self.mass
-        if numba_exists == True:
-            @jit
-            def jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass,mass):
-                t = np.linspace(0., T, frames)
-                x = np.zeros((frames, 2))
-                v = x.copy()
-                a = x.copy()
+        @jit
+        def jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass,mass):
+            t = np.linspace(0., T, frames)
+            x = np.zeros((frames, 2))
+            v = x.copy()
+            a = x.copy()
 
-                x[0,0], x[0,1] = x0, y0
-                v[0,0], v[0,1] = vx0, vy0
-                r_magnitude = LA.norm(x[0])
-                ur = np.divide(x[0], r_magnitude)
-                a[0] = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
-                t_now = dt
-                x_now = x[0].copy()
-                v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
-                a_now = a[0].copy()
-                save_index = 1
+            x[0,0], x[0,1] = x0, y0
+            v[0,0], v[0,1] = vx0, vy0
+            r_magnitude = LA.norm(x[0])
+            ur = np.divide(x[0], r_magnitude)
+            a[0] = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
+            t_now = dt
+            x_now = x[0].copy()
+            v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
+            a_now = a[0].copy()
+            save_index = 1
 
-                while t_now <= T + dt:
-                    r_magnitude = LA.norm(x_now)
-                    ur = np.divide(x_now, r_magnitude)
-                    a_now = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
-                    v_now += a_now*dt
-                    x_now += v_now*dt
-
-                    if t_now >= t[save_index]:
-                        x[save_index] = x_now
-                        v[save_index] = v_now
-                        a[save_index] = a_now
-                        save_index += 1
-                    t_now += dt
-                return t, x, v, a
-        else:
-            def jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass,mass):
-                t = np.linspace(0., T, frames)
-                x = np.zeros((frames, 2))
-                v = x.copy()
-                a = x.copy()
-
-                x[0,0], x[0,1] = x0, y0
-                v[0,0], v[0,1] = vx0, vy0
-                r_magnitude = LA.norm(x[0])
-                ur = np.divide(x[0], r_magnitude)
-                a[0] = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
-                t_now = dt
-                x_now = x[0].copy()
-                v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
-                a_now = a[0].copy()
-                save_index = 1
-
-                while t_now <= T + dt:
-                    r_magnitude = LA.norm(x_now)
-                    ur = np.divide(x_now, r_magnitude)
-                    a_now = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
-                    v_now += a_now*dt
-                    x_now += v_now*dt
-
-                    if t_now >= t[save_index]:
-                        x[save_index] = x_now
-                        v[save_index] = v_now
-                        a[save_index] = a_now
-                        save_index += 1
-                    t_now += dt
-                return t, x, v, a
+            while t_now <= T + dt:
+                r_magnitude = LA.norm(x_now)
+                ur = np.divide(x_now, r_magnitude)
+                a_now = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
+                v_now += a_now*dt
+                x_now += v_now*dt
+                if t_now >= t[save_index]:
+                    x[save_index] = x_now
+                    v[save_index] = v_now
+                    a[save_index] = a_now
+                    save_index += 1
+                t_now += dt
+            return t, x, v, a
 
         t, x, v, a = jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass,mass)
         return {'t': t, 'x': x, 'v': v, 'a': a}
@@ -342,9 +275,13 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
                 v3[:len(v1)], v3[len(v1):] = v1, v2
                 return np.mean(v3)
 
-    def get_escape_velocity(self, h):
+    def get_escape_velocity(self, h = 0.):
         '''Takes and returns SI-units'''
-        return np.sqrt(2.*6.67408e-11*1.99e30*self.mass/(self.radius*1000. + h))
+        return np.sqrt(2.*self.G_SI*1.99e30*self.mass/(self.radius*1000. + h))
+
+    def get_gravitational_force(self, h = 0.):
+        '''Takes and returns SI-units'''
+        return -self.G_SI*self.mass/((self.radius*1000. + h)**2.)
 
     #TESTS
 
@@ -807,7 +744,8 @@ class Rocket(object):
     def __init__(self, T = 1200., steps = 1e4, accuracy = 1e-3, planet = None,
     gas_box = None, payload_mass = 1e3, seed = 45355):
         self.seed = seed
-        sys.stdout.write('Simulating Gas Box')
+        print 'Countdown Has Begun:\n'
+        sys.stdout.write('[5] Simulating Gas Box')
         sys.stdout.flush()
         t0 = time.time()
         if isinstance(gas_box, Gas_Box):
@@ -818,119 +756,100 @@ class Rocket(object):
             fx._error(TypeError, 'Argument <gas_box> must be of type <Gas_Box>')
         t1 = time.time()
         print ' - %.2fs'%(t1-t0)
-        sys.stdout.write('Initializing Planet and Variables')
+        sys.stdout.write('[4] Initializing Planet and Variables')
         sys.stdout.flush()
         if isinstance(planet, Planet):
             self.planet = planet
         elif planet == None:
             self.planet = Planet(name = 'Sarplo', seed = self.seed)
+        else:
+            self.planet = Planet(seed = self.seed, name = planet)
         self.box_mass = self.gas_box.box_mass
         self.box_force = self.gas_box.force_per_second
-        self.escape_velocity_func = self.planet.get_escape_velocity
         self.T = float(T)
         self.steps = int(steps)
         self.accuracy = float(accuracy)
         self.payload_mass = float(payload_mass)
         t2 = time.time()
         print ' -  %.2fs'%(t2-t1)
-        sys.stdout.write('Determining Ideal Number of Chambers')
+        sys.stdout.write('[3] Determining Ideal Number of Chambers')
         sys.stdout.flush()
         self.chambers = self.get_gas_boxes_required()
         t3 = time.time()
         print ' -  %.2fs'%(t3-t2)
+        sys.stdout.write('[2] Getting Initial Velocities and Positions')
+        sys.stdout.flush()
+        self.x0, self.v0 = self.get_initial_conditions()
+        t4 = time.time()
+        print ' -  %.2fs'%(t4-t3)
+        sys.stdout.write('[1] Launching Heavy Lifter')
+        sys.stdout.flush()
+        self.t, self.x, self.v = self.launch_lifter(self.x0, self.v0)
+        t5 = time.time()
+        print ' -  %.2fs'%(t5-t4)
 
     def get_gas_boxes_required(self):
-        payload_mass = self.payload_mass
-        steps = self.steps
-        T = self.T
-        box_mass = self.box_mass
-        F = np.array([0.,self.box_force])
-        escape_velocity = self.escape_velocity_func(0.)
-        if numba_exists == True:
-            @jit
-            def jit_integration(F, T, steps, box_mass, payload_mass, escape_velocity):
-                i = 1.
-                step = 1e10
+        chambers = 1.
+        step = 1e15
+        v = 0.
+        x = 0.
+        dt = self.T/float(self.steps)
+        while abs(self.planet.get_escape_velocity(x) - v) > 1e-4:
+            while True:
+                mass = (chambers*self.box_mass*self.T) + self.payload_mass
+                dm = chambers*self.box_mass*dt
+                force = chambers*self.box_force
+                x = 0
                 v = 0
-                while abs(escape_velocity - v) > 1e-4:
-                    v = 0
-                    while v < escape_velocity:
-                        v_new = LA.norm(launch_rocket(F, T, steps, i, box_mass,
-                        payload_mass)[2][-1])
-                        if v_new > escape_velocity:
-                            break
-                        else:
-                            v = v_new
-                        i += step
-                    i -= step
-                    step /= 1e2
-                return i
-
-            @jit
-            def launch_rocket(F, T, steps, chambers, box_mass, payload_mass,
-            x0 = None, v0 = None):
-                if x0 == None:
-                    x0 = np.zeros(2)
-                if v0 == None:
-                    v0 = np.zeros(2)
-                dt = T/float(steps)
-                mass = (chambers*box_mass) + payload_mass
-                dm = chambers*box_mass*dt
-                F = chambers*F
-                x = np.zeros((steps, 2))
-                v = np.copy(x)
-                t = np.linspace(0, T, steps)
-                x[0] = x0
-                v[0] = v0
-                for i in range(int(steps)-1):
+                for i in range(self.steps-1):
                     mass -= dm
-                    a = F*dt*(1./mass)
-                    v[i+1] = v[i] + a*dt
-                    x[i+1] = x[i] + v[i+1]*dt
-                return t, x, v
-        else:
+                    a = (force + self.planet.get_gravitational_force(x))/mass
+                    v += a*dt
+                    x += v*dt
+                if v > self.planet.get_escape_velocity(x):
+                    break
+                chambers += step
+            chambers -= step
+            step /= 1e2
+        return chambers
 
-            def jit_integration(F, T, steps, box_mass, payload_mass, escape_velocity):
-                i = 1.
-                step = 1e10
-                v = 0
-                while abs(escape_velocity - v) > 1e-4:
-                    v = 0
-                    while v < escape_velocity:
-                        v_new = LA.norm(launch_rocket(F, T, steps, i, box_mass,
-                        payload_mass)[2][-1])
-                        if v_new > escape_velocity:
-                            break
-                        else:
-                            v = v_new
-                        i += step
-                    i -= step
-                    step /= 1e2
-                return i
+    def get_initial_conditions(self):
+        x = np.array([self.planet.convert_AU(self.planet.x0),
+        self.planet.convert_AU(self.planet.y0)])
+        v_rot = (self.planet.radius*1000.*2.*np.pi)/(self.planet.period*24.*60.*60.)
+        v = np.array([self.planet.convert_AU_per_year(self.planet.vx0),
+        self.planet.convert_AU_per_year(self.planet.vy0) + v_rot])
+        return x, v
 
-            def launch_rocket(F, T, steps, chambers, box_mass, payload_mass,
-            x0 = None, v0 = None):
-                if x0 == None:
-                    x0 = np.zeros(2)
-                if v0 == None:
-                    v0 = np.zeros(2)
-                dt = T/float(steps)
-                mass = (chambers*box_mass) + payload_mass
-                dm = chambers*box_mass*dt
-                F = chambers*F
-                x = np.zeros((steps, 2))
-                v = np.copy(x)
-                t = np.linspace(0, T, steps)
-                x[0] = x0
-                v[0] = v0
-                for i in range(int(steps)-1):
-                    mass -= dm
-                    a = F*dt*(1./mass)
-                    v[i+1] = v[i] + a*dt
-                    x[i+1] = x[i] + v[i+1]*dt
-                return t, x, v
-        b = jit_integration(F, T, steps, box_mass, payload_mass, escape_velocity)
-        return b
+    def launch_lifter(self, x0 = None, v0 = None, u = None):
+        if x0 is None:
+            x0 = np.zeros(2)
+        if v0 is None:
+            v0 = np.zeros(2)
+        if u is None:
+            u = np.array([0.,1.])
+        dt = self.T/float(self.steps)
+        mass = (self.chambers*self.box_mass*self.T) + self.payload_mass
+        dm = self.chambers*self.box_mass*dt
+        F = self.chambers*self.box_force*u
+        x = np.zeros((self.steps, 2))
+        v = np.copy(x)
+        t = np.linspace(0, self.T, self.steps)
+        x[0] = x0
+        v[0] = v0
+        g = np.zeros(2)
+        for i in range(self.steps-1):
+            mass -= dm
+            g[1] = self.planet.get_gravitational_force(x[i][1])
+            a = F*(1./mass) + g
+            v[i+1] = v[i] + a*dt
+            x[i+1] = x[i] + v[i+1]*dt
+        return t, x, v
+
+    def __str__(self):
+        string = 'Rocket Stats:\n'
+        string += '\tSeed: %d\n\tPlanet Name: %s\n\tPlanet Index: %d'%(self.seed,
+        self.planet.name, self.planet.index)
 
 class Satellite(object):
 
@@ -996,4 +915,4 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket()
+    r = Rocket(seed = 45355, planet = 'sarplo')
