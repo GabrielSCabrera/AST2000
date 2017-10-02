@@ -1328,7 +1328,7 @@ class Rocket(object):
             plt.plot(x[0], x[1], '-k')
             legend.append("Probe's Trajectory")
 
-        plt.legend(legend, loc = 0)
+        plt.legend(legend, loc = 9, bbox_to_anchor = (-0.2, 1))#, ncol = len(legend))
         plt.title("A Hohmann Transfer from Planet %s to Planet %s"\
         %(self.planet.name, self.target.name))
         plt.xlabel("AU")
@@ -1504,6 +1504,6 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket(seed = 28631, planet = 'e', target = 'a')
+    r = Rocket()
     r.plot_liftoff()
     r.plot_intercept()
