@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy import linalg as LA
 from scipy import interpolate as INTER
+import ui_tools as ui
 import time, sys, os, math
 try:
     from numba import jit
@@ -846,13 +847,15 @@ class Gas_Box(object):
 class Rocket(object):
 
     def __init__(self, T = 1200., steps = 1e5, accuracy = 1e-4, planet = None,
-    target = None, gas_box = None, payload_mass = 1.1e3, seed = 45355):
+    target = None, gas_box = None, payload_mass = 1.1e3, seed = 45355,
+    final_height = 9e7):
         self.seed = seed
         self.launch_window_calculated = False
         self.gas_box_calculated = False
         self.chambers_calculated = False
         self.initial_conditions_calculated = False
         self.liftoff_calculated = False
+        self.final_height = final_height
 
         self.gas_box = gas_box
         self.T = float(T)
@@ -983,20 +986,27 @@ class Rocket(object):
         return {'x_a':x_a, 'x_p':x_p, 'r_a':r_a, 'r_p':r_p, 'e':e, 'a':a,
         'T':T, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
 
-    def get_intercept_data(self, intervals = 10, accuracy = 1e-6,
-    final_height = 9e6):
-        multiplier = 1e-3
+    def get_intercept_data(self, intervals = 10, accuracy = 1e-8,
+    final_height = None):
+        if final_height == None:
+            final_height = self.final_height
+        multiplier = 1e-4
         lowest_dx = None
         best_time = None
         best_x_target = None
         years = 2.*(self.target.T + self.planet.T)
         closest_altitude = (self.target.radius*1000. + final_height)*6.68459e-12
 
+        loading_string = ' - loading (0%)'
+        ui.write(string = loading_string)
+
         def prep_orbit_data(t):
             x = self.planet.get_position_from_time(t)
             theta = np.arctan2(x[1], x[0])
             theta_intercept = theta + np.pi
             x_intercept = self.target.get_position_from_angle(theta_intercept)
+            u = fx.unit_vector(x_intercept)
+            x_intercept += closest_altitude*u
 
             if LA.norm(x) > LA.norm(x_intercept):
                 apoapsis = x
@@ -1013,8 +1023,9 @@ class Rocket(object):
             last_dx = None
             last_x_target = None
             last_t = None
-            dt = 0.5
-            t = y/float(intervals)
+            dt = 0.1
+            t0 = y/float(intervals)
+            t = t0
             dy = years/float(intervals)
 
             while True:
@@ -1022,17 +1033,18 @@ class Rocket(object):
                 time_to_intercept = orbit_data['T']/2. + t
                 target_x_intercept = self.target.get_position_from_time(time_to_intercept)
                 if orbit_data['start_at_apoapsis'] == True:
-                    dx = LA.norm(orbit_data['x_p'] - target_x_intercept)
+                    x = orbit_data['x_p']
                 else:
-                    dx = LA.norm(orbit_data['x_a'] - target_x_intercept)
+                    x = orbit_data['x_a']
 
-                if dx <= closest_altitude:
-                    break
-                elif last_dx is not None and abs(last_dx - dx) <= accuracy:
+                dx = LA.norm(x - target_x_intercept)
+
+                if last_dx is not None and abs(last_dx - dx) <= accuracy:
                     break
                 elif last_dx is None or last_dx > dx:
                     last_dx = dx
                     last_x_target = target_x_intercept
+                    last_x = x
                     last_t = t
                     t += dt
                 else:
@@ -1040,13 +1052,21 @@ class Rocket(object):
                     dt *= multiplier
                     t += dt
 
+            ui.delete_chars(len(loading_string))
+            progress = float(y)/int(years*intervals)*100.
+            loading_string = ' - loading (%d%%)'%(progress)
+            ui.write(string = loading_string)
+
             if lowest_dx is None or lowest_dx > last_dx:
                 lowest_dx = last_dx
                 best_x_target = last_x_target
+                best_x = last_x
                 best_time = last_t
 
+        ui.delete_chars(len(loading_string))
         orbit_data = prep_orbit_data(best_time)
-        data = {'t':best_time, 'h_final':lowest_dx, 'x_target':best_x_target}
+        data = {'t':best_time, 'h_final':lowest_dx - r.target.radius*6.68459e-9,
+        'x_target':best_x_target, 'x_closest':best_x}
         data.update(orbit_data)
         return data
 
@@ -1341,7 +1361,7 @@ class Rocket(object):
             self._check_liftoff_calculated()
 
         if prediction == True:
-            theta = np.linspace(0., 2*np.pi, 1000)
+            theta = np.linspace(0., 2*np.pi, 10000)
             x = self.get_analytical_position(self.intercept_data, theta)
             plt.plot(x[0], x[1], '-k')
             legend.append("Probe's Trajectory")
@@ -1522,7 +1542,7 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket(seed = 23558)
-    #r.plot_liftoff()
+    r = Rocket()
+    r.plot_liftoff()
     r.plot_intercept()
-    print r.planet.convert_AU(r.intercept_data['h_final'], 'km') - r.target.radius
+    print r.planet.convert_AU(r.intercept_data['h_final'], 'km')
