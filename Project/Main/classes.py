@@ -142,7 +142,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             self.numerical_complete = True
             self.interpolated = INTER.interp1d(t, x, axis = 0)
             self.velocity_from_time = INTER.interp1d(t, v, axis = 0)
-            angles = np.arctan2(x[:,1], x[:,0])# + np.pi
+            angles = np.arctan2(x[:,1], x[:,0])
             angles[np.where(angles == np.min(angles))[0][0]] = 0.
             angles[np.where(angles == np.max(angles))[0][0]] = 2*np.pi
             angles[np.where(angles < 0)] += 2*np.pi
@@ -514,6 +514,8 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
     def convert_AU(self, val, convert_to = 'm'):
         if convert_to == 'm':
             return 149597870700.*val
+        elif convert_to == 'km':
+            return 149597870.700*val
         elif convert_to == 'earth radii':
             return val/4.25875e-5
         elif convert_to == 'solar radii':
@@ -981,13 +983,14 @@ class Rocket(object):
         return {'x_a':x_a, 'x_p':x_p, 'r_a':r_a, 'r_p':r_p, 'e':e, 'a':a,
         'T':T, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
 
-    def get_intercept_data(self, intervals = 10, accuracy = 1e-3):
+    def get_intercept_data(self, intervals = 10, accuracy = 1e-16,
+    final_height = 9e6):
         multiplier = 1e-3
         lowest_dx = None
         best_time = None
         best_x_target = None
         years = 2.*(self.target.T + self.planet.T)
-        closest_altitude = (self.target.radius*1000. + 5e5)*6.68459e-12
+        closest_altitude = (self.target.radius*1000. + final_height)*6.68459e-12
 
         def prep_orbit_data(t):
             x = self.planet.get_position_from_time(t)
@@ -1005,6 +1008,7 @@ class Rocket(object):
                 start_at_apoapsis = False
 
             return self.get_orbit_data(apoapsis, periapsis, start_at_apoapsis)
+
         for y in range(int(years*intervals)):
             last_dx = None
             last_x_target = None
@@ -1013,7 +1017,7 @@ class Rocket(object):
             t = y/float(intervals)
             dy = years/float(intervals)
 
-            while last_dx is None or last_dx > accuracy:
+            while True:
                 orbit_data = prep_orbit_data(t)
                 time_to_intercept = orbit_data['T']/2. + t
                 target_x_intercept = self.target.get_position_from_time(time_to_intercept)
@@ -1022,16 +1026,22 @@ class Rocket(object):
                 else:
                     dx = LA.norm(orbit_data['x_a'] - target_x_intercept)
 
-                if last_dx is None or last_dx > dx:
+                if dx <= closest_altitude:
+                    print '1', dx
+                    break
+                elif last_dx is not None and abs(last_dx - dx) <= accuracy:
+                    print '2', dx
+                    break
+                elif last_dx is None or last_dx > dx:
                     last_dx = dx
                     last_x_target = target_x_intercept
                     last_t = t
                     t += dt
-                elif abs(last_dx - dx) <= closest_altitude:
-                    break
                 else:
                     t -= dt
                     dt *= multiplier
+                    t += dt
+
             if lowest_dx is None or lowest_dx > last_dx:
                 lowest_dx = last_dx
                 best_x_target = last_x_target
@@ -1111,7 +1121,8 @@ class Rocket(object):
         u_theta = self.planet.get_analytical_velocity(theta, unit = True)
         v_rot = (self.planet.radius*1000.*2.*np.pi)/(self.planet.period*24.*3600.)
 
-        u = self.planet.get_analytical_position(theta, unit = True)
+        #u = self.planet.get_analytical_position(theta, unit = True)
+        u = fx.unit_vector(x)
         return self.planet.convert_AU(x), self.planet.convert_AU_per_year(v),\
         u, u_theta, v_rot
 
@@ -1306,9 +1317,18 @@ class Rocket(object):
         "Planet %s's Orbit"%(self.planet.name), "Planet %s's Orbit"%(self.target.name)]
         sun = plt.Circle(xy = (0.,0.), radius = self.planet.sun.radius*6.68459e-9,
         color = 'y')
+        planet_0 = plt.Circle(xy = planet_x0, radius = self.planet.radius*6.68459e-9,
+        color = 'y')
+        target_0 = plt.Circle(xy = target_x0, radius = self.target.radius*6.68459e-9,
+        color = 'y')
+        target_1 = plt.Circle(xy = target_x1, radius = self.target.radius*6.68459e-9,
+        color = 'y')
         fig, ax = plt.subplots()
         ax.set(aspect = 1)
         ax.add_artist(sun)
+        ax.add_artist(planet_0)
+        ax.add_artist(target_0)
+        ax.add_artist(target_1)
 
         plt.plot(planet_x0[0], planet_x0[1], 'xr', ms = 20)
         plt.plot(target_x0[0], target_x0[1], '*g', ms = 15)
@@ -1505,5 +1525,6 @@ class Gaussian(object):
 
 if __name__ == '__main__':
     r = Rocket()
-    r.plot_liftoff()
+    #r.plot_liftoff()
     r.plot_intercept()
+    print r.planet.convert_AU(r.intercept_data['h_final'], 'km') - r.target.radius
