@@ -983,7 +983,7 @@ class Rocket(object):
         return {'x_a':x_a, 'x_p':x_p, 'r_a':r_a, 'r_p':r_p, 'e':e, 'a':a,
         'T':T, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
 
-    def get_intercept_data(self, intervals = 10, accuracy = 1e-16,
+    def get_intercept_data(self, intervals = 10, accuracy = 1e-6,
     final_height = 9e6):
         multiplier = 1e-3
         lowest_dx = None
@@ -1027,10 +1027,8 @@ class Rocket(object):
                     dx = LA.norm(orbit_data['x_a'] - target_x_intercept)
 
                 if dx <= closest_altitude:
-                    print '1', dx
                     break
                 elif last_dx is not None and abs(last_dx - dx) <= accuracy:
-                    print '2', dx
                     break
                 elif last_dx is None or last_dx > dx:
                     last_dx = dx
@@ -1524,7 +1522,7 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket()
+    r = Rocket(seed = 23558)
     #r.plot_liftoff()
     r.plot_intercept()
     print r.planet.convert_AU(r.intercept_data['h_final'], 'km') - r.target.radius
