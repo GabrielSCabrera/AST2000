@@ -88,7 +88,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             return utheta
 
     def get_analytical_orbit(self):
-        theta = np.linspace(0, 2.*np.pi, self.frames)
+        theta = np.linspace(0, 2.*np.pi, 10000)
         x = self.get_analytical_position(theta)
         self.analytical = {'theta': theta, 'x': x}
         self.analytical_complete = True
@@ -986,15 +986,17 @@ class Rocket(object):
         return {'x_a':x_a, 'x_p':x_p, 'r_a':r_a, 'r_p':r_p, 'e':e, 'a':a,
         'T':T, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
 
-    def get_intercept_data(self, intervals = 10, accuracy = 1e-8,
+    def get_intercept_data(self, intervals = None, accuracy = 1e-8,
     final_height = None):
         if final_height == None:
             final_height = self.final_height
-        multiplier = 1e-4
+        multiplier = 1e-3
         lowest_dx = None
         best_time = None
         best_x_target = None
         years = 2.*(self.target.T + self.planet.T)
+        if intervals == None:
+            intervals = max(15, int(years/2.))
         closest_altitude = (self.target.radius*1000. + final_height)*6.68459e-12
 
         loading_string = ' - loading (0%)'
@@ -1542,7 +1544,7 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket()
+    r = Rocket(seed = 28631)
     r.plot_liftoff()
     r.plot_intercept()
     print r.planet.convert_AU(r.intercept_data['h_final'], 'km')
