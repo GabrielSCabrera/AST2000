@@ -35,6 +35,17 @@ def error(errortype = None, msg = None):
 
 '''[4] MATHEMATICAL FUNCTIONS'''
 
+def unit_vector(v):
+    a = LA.norm(v)
+    if a == 0:
+        return np.zeros_like(v)
+    else:
+        return v/float(a)
+
+def rotate_vector(v, theta):
+    M = np.array([[np.cos(theta), -np.sin(theta)],[np.sin(theta), np.cos(theta)]])
+    return np.array([np.sum(M[0]*v), np.sum(M[1]*v)])
+
 def binomial_coefficient(n, r):
     return math.factorial(n)/(math.factorial(r)*math.factorial(n - r))
 
@@ -170,6 +181,10 @@ def get_planet_data(seed = 45355, planet_names = None, return_order = False):
     if seed == 45355:
         planet_names = ['sarplo', 'jevelan', 'calimno', 'sesena', 'corvee', 'bertela',
         'poppengo', 'trento']
+        myStarSystem = AST2000SolarSystem(seed)
+    elif seed == 82275:
+        planet_names = ['kraid', 'brinstar', 'norfair', 'ridley', 'chozo', 'phazon',
+        'serris', 'phantoon']
         myStarSystem = AST2000SolarSystem(seed)
     else:
         myStarSystem = AST2000SolarSystem(seed)

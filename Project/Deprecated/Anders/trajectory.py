@@ -5,9 +5,9 @@ Created on Wed Sep 06 13:00:02 2017
 @author: domin
 """
 import numpy as np
-from ast2000solarsystem_27_v3 import AST2000SolarSystem
+from ast2000solarsystem_27_v4 import AST2000SolarSystem
 
-seed = 45355
+seed = 28631
 system = AST2000SolarSystem(seed)
 
 AU = 149597871.                                         #AU in km
