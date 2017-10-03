@@ -210,5 +210,11 @@ def get_sun_data(seed = None):
     'radius':myStarSystem.star_radius, 'temperature':myStarSystem.temperature}
     return data_dict
 
+def get_vel_from_ref_stars(l, dl):
+    c = 2.99792458e8
+    return dl*c/l
+
+
+
 if __name__ == '__main__':
     pass
