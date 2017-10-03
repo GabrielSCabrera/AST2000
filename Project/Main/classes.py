@@ -1483,14 +1483,15 @@ class Rocket(object):
 
 class Satellite(object):
 
-    def __init__(self, mass = 1100., cs_area = 15.):
+    def __init__(self, mass = 1100., cs_area = 15., seed = 45355):
         self.mass = mass
         self.cs_area = cs_area
         self.solar_system = Solar_System()
+        self.seed = seed
 
-    def take_pictures(self):
-        a_phi = np.deg2rad(70); a_theta = np.deg2rad(70)
-        theta0 = np.pi/2
+    def take_pictures(self, a_phi = 70, a_theta = 70, theta0 = (np.pi/2)):
+        a_phi = np.deg2rad(a_phi)
+        a_theta = np.deg2rad(a_theta)
         inFile = open('himmelkule.npy', 'rb')
         himmelkulen = np.load(inFile)
         inFile.close()
@@ -1503,16 +1504,13 @@ class Satellite(object):
         X, Y = np.meshgrid(x,y)
         XY = np.zeros((480,640,2))
         XY[:,:,0] = X; XY[:,:,1] = Y
-        projections = np.zeros((10,480,640,3),dtype = np.uint8)
-        for j in range(2):
+        projections = np.zeros((360,480,640,3),dtype = np.uint8)
+        for j in range(359):
             phi0 = np.deg2rad(j)
-            x = X
-            y = Y
-            rho = np.sqrt(x**2 + y**2)
+            rho = np.sqrt(X**2 + Y**2)
             c = 2*np.arctan(rho/2)
-            theta = np.pi/2 - np.arcsin(np.cos(c)*np.cos(theta0) + y*np.sin(c)*np.sin(theta0)/rho)
-            phi = phi0 + np.arctan(x*np.sin(c)/(rho*np.sin(theta0)*np.cos(c) - y*np.cos(theta0)*np.sin(c)))
-            print np.shape(theta), np.shape(phi)
+            theta = np.pi/2 - np.arcsin(np.cos(c)*np.cos(theta0) + Y*np.sin(c)*np.sin(theta0)/rho)
+            phi = phi0 + np.arctan(X*np.sin(c)/(rho*np.sin(theta0)*np.cos(c) - Y*np.cos(theta0)*np.sin(c)))
             for n,(i,v) in enumerate(zip(theta, phi)):
                 for m,(k,w) in enumerate(zip(i,v)):
                     pixnum = A2000.ang2pix(k,w)
@@ -1528,24 +1526,27 @@ class Satellite(object):
         phi = np.where(fit==min(fit))
         return phi
 
-    def get_velocity(self):
-        c = 2.99792458e8
-        l = 656.3
-        l1 = l + 0.001238992889
-        l2 = l + -0.010729689917
+    def get_velocity(self, l = 656.3):
+        dl1 = 0.001238992889
+        dl2 = -0.010729689917
         phi_1 = np.deg2rad(338.612749)
         phi_2 = np.deg2rad(283.359744)
-        v_refstar1 = (l1 - l)*c/l
-        v_refstar2 = (l2 - l)*c/l
+        v_refstar1 = fx.get_vel_from_ref_stars(l,dl1)
+        v_refstar2 = fx.get_vel_from_ref_stars(l,dl2)
         rm = np.matrix([[np.sin(phi_2), -np.sin(phi_1)], [-np.cos(phi_2), np.cos(phi_1)]])
         vm = np.matrix([[v_refstar1], [v_refstar2]])
         vxy = (1./np.sin(phi_2 - phi_1))*rm*vm
         return vxy
 
     def get_position(self, dist_list, time):
-        xy1 = self.solar_system.orbits['a'](time)
-        xy2 = self.solar_system.orbits['b'](time)
-        xy3 = self.solar_system.orbits['c'](time)
+        if self.seed == 45355:
+            xy1 = self.solar_system.orbits['sarplo'](time)
+            xy2 = self.solar_system.orbits['jevelan'](time)
+            xy3 = self.solar_system.orbits['calimno'](time)
+        else:
+            xy1 = self.solar_system.orbits['a'](time)
+            xy2 = self.solar_system.orbits['b'](time)
+            xy3 = self.solar_system.orbits['c'](time)
         r1 = dist_list[0]
         r2 = dist_list[1]
         r3 = dist_list[2]
@@ -1612,7 +1613,7 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket()
+    r = Rocket(seed = 15622, target = 'h')
     r.plot_liftoff()
     r.plot_intercept()
     print r.planet.convert_AU(r.intercept_data['h_final'], 'km')
