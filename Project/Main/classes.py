@@ -1725,8 +1725,11 @@ class Gaussian(object):
 if __name__ == '__main__':
     r = Rocket()
 <<<<<<< HEAD
+<<<<<<< HEAD
     r.run()
 =======
+=======
+>>>>>>> 428f4e259b49de4bd1e9d7f5ceecb013921862c6
     r.plot_liftoff()
     r.plot_intercept()
     print r.planet.convert_AU(r.intercept_data['h_final'], 'km')
