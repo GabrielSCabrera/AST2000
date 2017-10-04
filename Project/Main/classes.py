@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy import linalg as LA
 from scipy import interpolate as INTER
-import sympy.geometry as GEO
 import ui_tools as ui
 import time, sys, os, math
 try:
@@ -1597,73 +1596,6 @@ class Satellite(object):
     def __init__(self, mass = 1100., cs_area = 15.):
         self.mass = mass
         self.cs_area = cs_area
-        self.solar_system = Solar_System()
-
-    def take_pictures(self):
-        a_phi = np.deg2rad(70); a_theta = np.deg2rad(70)
-        theta0 = np.pi/2
-        inFile = open('himmelkule.npy', 'rb')
-        himmelkulen = np.load(inFile)
-        inFile.close()
-        x_max = (2*np.sin(a_phi/2))/(1+np.cos(a_phi/2))
-        x_min = -(2*np.sin(a_phi/2))/(1+np.cos(a_phi/2))
-        y_max = (2*np.sin(a_theta/2))/(1+np.cos(a_theta/2))
-        y_min = -(2*np.sin(a_theta/2))/(1+np.cos(a_theta/2))
-        x = np.linspace(x_min,x_max,640)
-        y = np.linspace(y_max,y_min,480)
-        X, Y = np.meshgrid(x,y)
-        XY = np.zeros((480,640,2))
-        XY[:,:,0] = X; XY[:,:,1] = Y
-        projections = np.zeros((10,480,640,3),dtype = np.uint8)
-        for j in range(2):
-            phi0 = np.deg2rad(j)
-            x = X
-            y = Y
-            rho = np.sqrt(x**2 + y**2)
-            c = 2*np.arctan(rho/2)
-            theta = np.pi/2 - np.arcsin(np.cos(c)*np.cos(theta0) + y*np.sin(c)*np.sin(theta0)/rho)
-            phi = phi0 + np.arctan(x*np.sin(c)/(rho*np.sin(theta0)*np.cos(c) - y*np.cos(theta0)*np.sin(c)))
-            print np.shape(theta), np.shape(phi)
-            for n,(i,v) in enumerate(zip(theta, phi)):
-                for m,(k,w) in enumerate(zip(i,v)):
-                    pixnum = A2000.ang2pix(k,w)
-                    temp = himmelkulen[pixnum]
-                    projections[j][n][m] = (temp[2], temp[3], temp[4])
-        return projections
-
-    def orientation(self, picture):
-        projections = take_pictures()
-        fit = np.zeros(360)
-        for i in range(359):
-            fit[i] = np.sum((projections[i] - picture)**2)
-        phi = np.where(fit==min(fit))
-        return phi
-
-    def get_velocity(self):
-        c = 2.99792458e8
-        l = 656.3
-        l1 = l + 0.001238992889
-        l2 = l + -0.010729689917
-        phi_1 = np.deg2rad(338.612749)
-        phi_2 = np.deg2rad(283.359744)
-        v_refstar1 = (l1 - l)*c/l
-        v_refstar2 = (l2 - l)*c/l
-        rm = np.matrix([[np.sin(phi_2), -np.sin(phi_1)], [-np.cos(phi_2), np.cos(phi_1)]])
-        vm = np.matrix([[v_refstar1], [v_refstar2]])
-        vxy = (1./np.sin(phi_2 - phi_1))*rm*vm
-        return vxy
-
-    def get_position(self, dist_list, time):
-        xy1 = self.solar_system.orbits['a'](time)
-        xy2 = self.solar_system.orbits['b'](time)
-        xy3 = self.solar_system.orbits['c'](time)
-        r1 = dist_list[0]
-        r2 = dist_list[1]
-        r3 = dist_list[2]
-        c1 = GEO.Circle(GEO.Point(xy1),r1)
-        c2 = GEO.Circle(GEO.Point(xy2),r2)
-        c3 = GEO.Circle(GEO.Point(xy3),r3)
-        return np.array(GEO.intersection(c1,c2,c3))
 
 class Lander(object):
 
@@ -1724,13 +1656,4 @@ class Gaussian(object):
 
 if __name__ == '__main__':
     r = Rocket()
-<<<<<<< HEAD
-<<<<<<< HEAD
     r.run()
-=======
-=======
->>>>>>> 428f4e259b49de4bd1e9d7f5ceecb013921862c6
-    r.plot_liftoff()
-    r.plot_intercept()
-    print r.planet.convert_AU(r.intercept_data['h_final'], 'km')
->>>>>>> 428f4e259b49de4bd1e9d7f5ceecb013921862c6
