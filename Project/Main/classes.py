@@ -20,7 +20,8 @@ Simen 47566
 Lars 78826
 Ulrik 82275
 Gabriel 45355
-Anders 28631'''
+Anders 28631
+Ivar 81402'''
 
 class Planet(object):                                   #FIX LEAPFROG ALGORITHM
 
@@ -608,6 +609,7 @@ class Solar_System(object):
 
         self.number_of_planets = len(self.planet_order)
         self.system = A2000(self.seed)
+        self.G = 4.*np.pi**2.
 
     #CALCULATIONS
 
@@ -654,6 +656,12 @@ class Solar_System(object):
             print ", Done - %.2fs"%(time.time()-t0)
 
         return orbits
+
+    def get_positions_from_time(self, t):
+        x = np.zeros((self.number_of_planets, 2))
+        for n, p in enumerate(self.planets.itervalues()):
+            x[n] = p.get_position_from_time(t)
+        return x
 
     #DATA VISUALIZATION
 
@@ -703,10 +711,15 @@ class Solar_System(object):
 
     #DATA EXTRACTION
 
-    def __call__(self, parameter):
-        op = {}
-        for n,p in self.planets.iteritems():
-            op[n] = p.__dict__[parameter]
+    def __call__(self, parameter, array = False):
+        if array == False:
+            op = {}
+            for n,p in self.planets.iteritems():
+                op[n] = p.__dict__[parameter]
+        else:
+            op = np.zeros(self.number_of_planets)
+            for n,p in enumerate(self.planets.itervalues()):
+                op[n] = p.__dict__[parameter]
         return op
 
     def get_max(self, parameter, only_return_value = False):
@@ -856,38 +869,49 @@ class Rocket(object):
         self.chambers_calculated = False
         self.initial_conditions_calculated = False
         self.liftoff_calculated = False
-        self.final_height = final_height
+        self.transfer_calculated = False
 
+        self.final_height = final_height
         self.gas_box = gas_box
         self.T = float(T)
         self.steps = int(steps)
         self.accuracy = float(accuracy)
         self.payload_mass = float(payload_mass)
 
-        if isinstance(planet, Planet):
-            self.planet = planet
-        elif planet is None and seed == 45355:
-            self.planet = Planet(name = 'sarplo', seed = self.seed)
-        elif planet is None:
-            self.planet = Planet(name = 'a', seed = self.seed)
-        else:
-            self.planet = Planet(seed = self.seed, name = planet)
+        self.solar_system = Solar_System(seed = self.seed)
 
-        if isinstance(target, Planet):
-            self.target = target
-        elif target is None and seed == 45355:
-            self.target = Planet(name = 'jevelan', seed = self.seed)
-        elif target is None:
-            self.target = Planet(name = 'b', seed = self.seed)
+        if planet is None and seed == 45355:
+            planet_name = 'sarplo'
+        elif planet is None:
+            planet_name = 'a'
         else:
-            self.target = Planet(seed = self.seed, name = target)
+            planet_name = planet
+
+        self.planet = self.solar_system.planets[planet_name]
+
+        if target is None and seed == 45355:
+            target_name = 'jevelan'
+        elif target is None:
+            target_name = 'b'
+        else:
+            target_name = target
+
+        self.target = self.solar_system.planets[target_name]
 
         if self.planet == self.target:
             fx.error(NameError, 'Must launch rocket from one planet to another')
 
         self.k = self.planet.sun.mass*self.planet.G
 
+        self.burns = []
+
     #MAIN FUNCTIONS
+
+    def run(self):
+        self.calculate_transfer()
+        print '\n', self.__str__()
+        self.plot_liftoff()
+        self.plot_intercept()
 
     def calculate_launch_window(self):
         t0 = time.time()
@@ -949,6 +973,16 @@ class Rocket(object):
         print ' -  Done (%.2fs)'%(t1-t0)
         self.liftoff_calculated = True
 
+    def calculate_transfer(self):
+        self._check_liftoff_calculated()
+        t0 = time.time()
+        sys.stdout.write('Calculating Orbital Transfer')
+        sys.stdout.flush()
+        self.transfer_data = self.run_transfer()
+        t1 = time.time()
+        print ' -  Done (%.2fs)'%(t1-t0)
+        self.transfer_calculated = True
+
     #ORBITAL DATA FUNCTIONS
 
     def get_interception_a(self, t):
@@ -984,6 +1018,8 @@ class Rocket(object):
         u_tangent = fx.rotate_vector(u, np.pi/2.)
         v_p = v_p * u_tangent
         psi = np.arctan2(x_a[1], x_a[0])
+        if psi < 0:
+            psi += 2*np.pi
         return {'x_a':x_a, 'x_p':x_p, 'r_a':r_a, 'r_p':r_p, 'e':e, 'a':a,
         'T':T, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
 
@@ -1000,7 +1036,7 @@ class Rocket(object):
             intervals = max(15, int(years/2.))
         closest_altitude = (self.target.radius*1000. + final_height)*6.68459e-12
 
-        loading_string = ' - loading (0%)'
+        loading_string = ' - Preparing...'
         ui.write(string = loading_string)
 
         def prep_orbit_data(t):
@@ -1057,7 +1093,7 @@ class Rocket(object):
 
             ui.delete_chars(len(loading_string))
             progress = float(y)/int(years*intervals)*100.
-            loading_string = ' - loading (%d%%)'%(progress)
+            loading_string = ' - Loading (%d%%)'%(progress)
             ui.write(string = loading_string)
 
             if lowest_dx is None or lowest_dx > last_dx:
@@ -1114,6 +1150,8 @@ class Rocket(object):
         dt = self.T*self.accuracy
         while abs(self.planet.get_escape_velocity(0) - v) >= self.accuracy:
             while True:
+                x_escape = None
+                t_escape = None
                 mass = (chambers*self.box_mass*self.T) + self.payload_mass
                 dm = chambers*self.box_mass*dt
                 force = chambers*self.box_force
@@ -1124,17 +1162,22 @@ class Rocket(object):
                     a = (force/mass + self.planet.get_gravitational_acceleration(x))
                     v += a*dt
                     x += v*dt
-                if v >= self.planet.get_escape_velocity(0):
+                    if x_escape == None and v > self.planet.get_escape_velocity(x):
+                        x_escape = x
+                        t_escape = i*dt
+                if v > self.planet.get_escape_velocity(0):
                     break
+
                 chambers += step
             chambers -= step
             step /= 10.
-        self.escape_altitude = x
+        self.escape_altitude = x_escape
+        self.escape_time = t_escape
         return chambers
 
     def get_initial_conditions(self):
         self._check_launch_window_calculated()
-        t0 = self.intercept_data['t']
+        t0 = self.intercept_data['t'] - self.T*3.17098e-8
         x = self.planet.get_position_from_time(t0)
         v = self.planet.get_velocity_from_time(t0)
         theta = self.planet.get_angle_from_time(t0)
@@ -1153,6 +1196,12 @@ class Rocket(object):
         k <= 10 is undesirable'''
         M, m = self.planet.sun.mass, self.target.mass
         return ((R/r)**2.)*(m/M)
+
+    #IN FLIGHT FUNCTIONS
+
+    def burn(self, t, v0, v1):
+        self.burns.append([t, v1 - v0])
+        return v1
 
     #INTEGRATORS
 
@@ -1199,7 +1248,7 @@ class Rocket(object):
 
                 a_p = jit_gravity(G, sun_mass, x_p[i])
                 v_p[i+1] = v_p[i] + a_p*dt
-                x_p[i+1] = x_p[i] + v_p[i+1]*dt
+                x_p[i+1] = x_p[i] + v0*dt
 
                 u = unit_vector(x[i]-x_p[i])
                 a = (F/mass)*u
@@ -1210,72 +1259,72 @@ class Rocket(object):
                 x[i+1] = x[i] + v[i+1]*dt
 
                 if v_esc is None and LA.norm(v[i+1] - v0 - v_rot*u_theta)\
-                >= self.planet.get_escape_velocity(LA.norm(x[i+1]-x_p[i+1]-radius*u)):
+                > self.planet.get_escape_velocity(LA.norm(x[i+1]-x_p[i+1]-radius*u)):
                     v_esc = v[i+1].copy()
                     x_esc = x[i+1].copy()
                     t_esc = t[i+1].copy()
+                    i_esc = i+1
 
-            return {'t':t, 'x':x, 'v':v, 'x_p':x_p, 'v_p':v_p,
-                    't_esc':t_esc, 'x_esc':x_esc, 'v_esc':v_esc}
+            return {'t':t, 'x':x, 'v':v, 'x_p':x_p, 'v_p':v_p, 't_esc':t_esc,
+            'x_esc':x_esc, 'v_esc':v_esc, 'i_esc':i_esc}
 
         return integration(G, planet_mass, radius, self.steps, mass, dm, F,
         self.T, dt, u, u_theta, x0, v0, v_rot, sun_mass)
 
-    def get_numerical_trajectory(self, x0, y0, vx0, vy0, T = None, dt = None,
-    frames = None, return_vals = False):
-        #USES LEAPFROG INTEGRATION. WORK IN PROGRESS
+    def run_transfer(self, steps = 1e4):
+        self._check_liftoff_calculated()
+        x0 = self.liftoff_data['x'][-1]*6.68459e-12
+        v0 = self.liftoff_data['v'][-1]*0.000210805
+        t0 = self.liftoff_data['t'][-1]*3.17098e-8
 
-        if T == None:
-            T = self.T
-        if dt == None:
-            dt = self.dt
-        if frames == None:
-            frames = self.frames
-        G, sun_mass = self.G, self.sun.mass
+        loading_string = ' - Preparing...'
+        ui.write(string = loading_string)
 
-        @jit
-        def jit_integrate(T, dt, frames, x0, y0, vx0, vy0, G, sun_mass):
-            t = np.linspace(0., T, frames)
-            x = np.zeros((frames, 2))
-            v = x.copy()
-            a = x.copy()
+        data = self.intercept_data
+        if data['start_at_apoapsis'] == True:
+            v0 = self.burn(t0, v0, data['v_a'])
+        else:
+            v0 = self.burn(t0, v0, data['v_p'])
 
-            x[0,0], x[0,1] = x0, y0
-            v[0,0], v[0,1] = vx0, vy0
-            r_magnitude = LA.norm(x[0])
-            ur = np.divide(x[0], r_magnitude)
-            a[0] = (-(G*sun_mass)/(r_magnitude**2.))*ur
-            t_now = dt
-            x_now = x[0].copy()
-            v_now = v[0].copy()# + 0.5*get_acceleration(x_now)*dt
-            a_now = a[0].copy()
-            save_index = 1
+        masses = self.solar_system('mass', array = True)
+        radii = self.solar_system('radius', array = True)
+        G = self.solar_system.G
 
-            while t_now <= T + dt:
-                r_magnitude = LA.norm(x_now)
-                ur = np.divide(x_now, r_magnitude)
-                for n,p in enumerate(self.solar_system.planets):
-                    rp = (x_now - solar_system.orbits[p](t_now))
-                    rp_magnitude = LA.norm(r)
-                    urp = np.divide(r, r_magnitude)
-                    ap_now -= G*(self.solar_system.planets[p].mass/rp_magnitude**3)*urp
-                a_now = ap_now - (G*sun_mass)/(r_magnitude**2.)*ur
-                v_now += a_now*dt
-                x_now += v_now*dt
+        def get_gravity(x, t):
+            x_p = self.solar_system.get_positions_from_time(t)
+            r = x - x_p
+            a0 = np.divide(-G*masses, LA.norm(r, axis = -1)**3.)
+            a = np.zeros((len(a0), 2))
+            a[:,0], a[:,1] = a0, a0
+            return np.sum(a*r)
 
-                if t_now >= t[save_index]:
-                    x[save_index] = x_now
-                    v[save_index] = v_now
-                    a[save_index] = a_now
-                    save_index += 1
+        def get_sun_gravity(x):
+            a = -G*self.planet.sun.mass/(LA.norm(x)**3.)
+            return a*x
 
+        t_end = t0 + data['T']/2.
+        dt = float(t_end)/steps
+        n = 0
 
-                t_now += dt
-            return t, x, v, a
+        t = [t0]
+        x = [x0]
+        v = [v0]
 
-        t, x, v, a = jit_integrate(T,dt,frames,x0,y0,vx0,vy0,G,sun_mass)
+        while t[n] < t_end:
+            v.append(v[n] + get_sun_gravity(x[n])*dt + get_gravity(x[n], t[n])*dt)
+            x.append(x[n] + v[n+1]*dt)
+            t.append(t[n] + dt)
 
-        return {'t': t, 'x': x, 'v': v, 'a': a}
+            progress = (float(t[n+1])/float(t_end))*100.
+            new_string = ' - Loading (%d%%)'%(int(progress))
+            if loading_string != new_string:
+                ui.delete_chars(len(loading_string))
+                loading_string = new_string
+                ui.write(string = loading_string)
+            n += 1
+
+        ui.delete_chars(len(loading_string))
+        return {'t':np.array(t), 'x':np.array(x), 'v':np.array(v)}
 
     #PLOTTING FUNCTIONS
 
@@ -1304,7 +1353,7 @@ class Rocket(object):
 
         plt.show()
 
-    def plot_intercept(self, prediction = True, numerical = False):
+    def plot_intercept(self, prediction = True, numerical = True):
         self._check_launch_window_calculated()
 
         self.planet._check_analytical()
@@ -1361,13 +1410,16 @@ class Rocket(object):
         plt.plot(x_target[0], x_target[1], '--k')
 
         if numerical == True:
-            self._check_liftoff_calculated()
+            self._check_transfer_calculated()
+            x_n = self.transfer_data['x']
+            plt.plot(x_n[:,0], x_n[:,1], '-m')
+            legend.append("Probe's True Trajectory")
 
         if prediction == True:
             theta = np.linspace(0., 2*np.pi, 10000)
-            x = self.get_analytical_position(self.intercept_data, theta)
-            plt.plot(x[0], x[1], '-k')
-            legend.append("Probe's Trajectory")
+            x_p = self.get_analytical_position(self.intercept_data, theta)
+            plt.plot(x_p[0], x_p[1], '-k')
+            legend.append("Probe's Predicted Trajectory")
 
         plt.legend(legend, loc = 9, bbox_to_anchor = (-0.2, 1))#, ncol = len(legend))
         plt.title("A Hohmann Transfer from Planet %s to Planet %s"\
@@ -1380,9 +1432,60 @@ class Rocket(object):
     #CLASS OPERATIONS
 
     def __str__(self):
-        string = 'Rocket Stats:\n'
-        string += '\tSeed: %d\n\tPlanet Name: %s\n\tPlanet Index: %d'%(self.seed,
+        string = 'Basic Info:'
+        string += '\n\tSeed: %d\n\tPlanet Name: %s, Planet Index: %d'%(self.seed,
         self.planet.name, self.planet.index)
+        string += '\n\tTarget Name: %s, Target Index: %d'%(self.target.name,
+        self.target.index)
+
+        if self.chambers_calculated == True:
+            string += '\n\nRocket Stats:'
+            string += '\n\tNumber of Chambers: %g'%(self.chambers)
+            string += '\n\tTotal Thrust: %g kN'%(self.chambers*self.box_force/1e3)
+
+        if self.launch_window_calculated == True:
+            icd = self.intercept_data
+            string += '\n\nLaunch Window Data:'
+            string += '\n\tIdeal Launch Time: %g yrs'%(icd['t'])
+            string += '\n\tClosest Approach: %g AU, %g km'\
+            %(icd['h_final'], self.planet.convert_AU(icd['h_final'], 'km'))
+            string += '\n\tRocket Launches at '
+            if icd['start_at_apoapsis'] == True:
+                string += 'Apoapsis'
+            else:
+                string += 'Periapsis'
+
+            string += '\n\nIntercept Orbit Data:'
+            string += '\n\tApoapsis: %g AU, Periapsis %g AU'\
+            %(icd['r_a'], icd['r_p'])
+            string += '\n\tEccentricity: %g, Orbital Period: %g yrs'\
+            %(icd['e'], icd['T'])
+            string += '\n\tSemi-Major Axis: %g AU, Angle of Semi-Major Axis: %g rad'\
+            %(icd['a'], icd['psi'])
+            string += '\n\tPeriapsis Velocity: %g AU/yr, %g km/s'\
+            %(LA.norm(icd['v_p']),
+            LA.norm(self.planet.convert_AU_per_year(icd['v_p'], 'km/s')))
+
+        if self.liftoff_calculated == True:
+            ld = self.liftoff_data
+            string += '\n\nLiftoff Data:'
+            string += '\n\tEscape Velocity: %s m/s'%(str(tuple(ld['v_esc'])))
+            string += '\n\tEscape Position: %s m'%(str(tuple(ld['x_esc'])))
+            string += '\n\tEscape Time: %s s'%(ld['t_esc'])
+
+        if len(self.burns) > 0:
+            string += '\n\nInterception Burns (Delta-V):'
+            for n,b in enumerate(self.burns):
+                rad = np.arctan2(b[1][1], b[1][0])
+                if rad < 0:
+                    rad += 2*np.pi
+                deg = np.rad2deg(rad)
+                dv = self.planet.convert_AU_per_year(LA.norm(b[1]), 'm/s')
+                d_sign = u'\u00b0'
+                string += '\n[%d]\t%g m/s, %.3f%s at %g yrs'%(n+1, dv, deg, d_sign, b[0])
+                string += ', or (%g, %g) AU/yr'%(b[1][0], b[1][1])
+
+        return string
 
     #TEST FUNCTIONS
 
@@ -1406,37 +1509,37 @@ class Rocket(object):
         if self.liftoff_calculated == False:
             self.calculate_liftoff()
 
+    def _check_transfer_calculated(self):
+        if self.transfer_calculated == False:
+            self.calculate_transfer()
+
     def test_launch_simple(self):
+        self._check_chambers_calculated()
+
         m_to_AU = 1./149597870700.
         radius = self.planet.radius*1000.
 
-        x0 = np.array([self.planet.x0, self.planet.y0])
-        u = fx.rotate_vector(np.array([1.,0.]), self.planet.omega)
+        x0 = np.array([self.planet.x0 + radius*m_to_AU, self.planet.y0])
 
         self.planet.system.engine_settings(self.box_force, self.chambers,
         self.gas_box.particles_per_second, self.fuel_mass, self.T,
-        x0 + radius*m_to_AU*u, 0.)
+        x0, 0.)
 
         x0 = self.planet.convert_AU(x0)
 
-        x_final = self.escape_altitude + radius
-        x_final = x0 + u*x_final
+        x_final = np.array([self.escape_altitude, 0.]) + x0
 
         v_rot = (radius*2.*np.pi)/(self.planet.period*24.*3600.)
-        u_theta = fx.rotate_vector(np.array([0.,1.]), self.planet.omega)
 
-        v0 = np.array([self.planet.vx0, self.planet.vy0])
-        v0 = self.planet.convert_AU_per_year(v0)
+        y_final = (self.planet.convert_AU_per_year(self.planet.vy0) + v_rot)*\
+        np.array([0.,self.escape_time])
 
-        x_final += (v0 + v_rot*u_theta)*self.T
-
-        data = self.launch_lifter(x0 = x0, v0 = v0, u = u,
-        u_theta = u_theta, v_rot = v_rot)
+        x_final += y_final
 
         x_final *= m_to_AU
 
         real = self.planet.system.mass_needed_launch(x_final, test=True)[2]
-        print x_final - real
+        print self.planet.convert_AU(x_final - real)
 
     def test_launch(self):
         self._check_chambers_calculated()
@@ -1461,23 +1564,31 @@ class Rocket(object):
         data = self.launch_lifter(x0 = x0, v0 = v0, u = u,
         u_theta = u_theta, v_rot = v_rot)
 
+        i_esc = data['i_esc']
+
         planet = plt.Circle(xy = data['x_p'][0], radius = radius, color = 'b')
-        planet2 = plt.Circle(xy = data['x_p'][-1], radius = radius, color = 'b')
+        planet2 = plt.Circle(xy = data['x_p'][i_esc], radius = radius, color = 'b')
+        planet3 = plt.Circle(xy = data['x_p'][-1], radius = radius, color = 'r',
+        alpha = 0.2)
         fig, ax = plt.subplots()
         ax.set(aspect=1)
         ax.add_artist(planet)
         ax.add_artist(planet2)
+        ax.add_artist(planet3)
         plt.plot(data['x'][:,0], data['x'][:,1])
         plt.plot(data['x_p'][:,0], data['x_p'][:,1])
+        plt.plot(data['x_p'][i_esc,0], data['x_p'][i_esc,1], 'xw', ms = 20)
+        plt.plot(data['x_p'][-1,0], data['x_p'][-1,1], 'xy', ms = 20)
         plt.xlim(xmin = x0[0]-radius)
         plt.ylim(ymin = x0[1]-radius)
 
         x = data['x_esc']
         plt.plot(x[0], x[1], 'xg', ms = 10)
+        plt.grid(True)
         x *= m_to_AU
 
         real = self.planet.convert_AU(self.planet.system.mass_needed_launch(x, test=True)[2])
-        print self.planet.convert_AU(x)-real
+        print "Target off by %s meters"%(str(tuple(self.planet.convert_AU(x)-real)))
         plt.plot(real[0], real[1], 'xr', ms = 10)
         plt.show()
 
@@ -1518,7 +1629,7 @@ class Satellite(object):
                     projections[j][n][m] = (temp[2], temp[3], temp[4])
         return projections
 
-    def orientation(self, picture):
+    def get_orientation_phi(self, picture):
         projections = take_pictures()
         fit = np.zeros(360)
         for i in range(359):
@@ -1527,33 +1638,39 @@ class Satellite(object):
         return phi
 
     def get_velocity(self, l = 656.3):
-        dl1 = 0.001238992889
-        dl2 = -0.010729689917
-        phi_1 = np.deg2rad(338.612749)
-        phi_2 = np.deg2rad(283.359744)
-        v_refstar1 = fx.get_vel_from_ref_stars(l,dl1)
-        v_refstar2 = fx.get_vel_from_ref_stars(l,dl2)
+        v_refstar1, phi_1, v_refstar2, phi_2 = fx.get_vel_from_ref_stars(l, seed = None)
         rm = np.matrix([[np.sin(phi_2), -np.sin(phi_1)], [-np.cos(phi_2), np.cos(phi_1)]])
         vm = np.matrix([[v_refstar1], [v_refstar2]])
         vxy = (1./np.sin(phi_2 - phi_1))*rm*vm
         return vxy
 
-    def get_position(self, dist_list, time):
+    def get_position_from_dist(self, dist_list,time):
+        number_of_planets = self.solar_system.number_of_planets
         if self.seed == 45355:
-            xy1 = self.solar_system.orbits['sarplo'](time)
-            xy2 = self.solar_system.orbits['jevelan'](time)
-            xy3 = self.solar_system.orbits['calimno'](time)
+            planets = ['sarplo', 'jevelan', 'calimno', 'sesena', 'corvee', 'bertela',
+            'poppengo', 'trento']
         else:
-            xy1 = self.solar_system.orbits['a'](time)
-            xy2 = self.solar_system.orbits['b'](time)
-            xy3 = self.solar_system.orbits['c'](time)
-        r1 = dist_list[0]
-        r2 = dist_list[1]
-        r3 = dist_list[2]
-        c1 = GEO.Circle(GEO.Point(xy1),r1)
-        c2 = GEO.Circle(GEO.Point(xy2),r2)
-        c3 = GEO.Circle(GEO.Point(xy3),r3)
-        return np.array(GEO.intersection(c1,c2,c3))
+            planets = list(string.ascii_lowercase[:number_of_planets])
+        if number_of_planets % 2 == 0:
+            continue
+        else:
+            del planets[-1]
+        circles = []
+        for i,n in enumerate(planets):
+            circles.append(GEO.Circle(GEO.Point(self.solar_system.orbits[n](time)),dist_list[i]))
+        intersections = np.zeros((len(circles),2))
+        for i in xrange(0,len(circles),2):
+            inter = np.array(GEO.intersection(circles[i],circles[i+1]))
+            for k in xrange(2):
+                intersections[i+k] = inter[k]
+        fit = []
+        for i in xrange(len(intersections)):
+            for k in xrange(len(intersections)):
+                if k <= i:
+                    continue
+                fit.append(np.sum((intersections[i] - intersections[k])**2))
+        return intersections[np.where(fit==min(fit))]
+
 
 class Lander(object):
 
@@ -1613,7 +1730,5 @@ class Gaussian(object):
         plt.show()
 
 if __name__ == '__main__':
-    r = Rocket(seed = 15622, target = 'h')
-    r.plot_liftoff()
-    r.plot_intercept()
-    print r.planet.convert_AU(r.intercept_data['h_final'], 'km')
+    r = Rocket()
+    r.run()
