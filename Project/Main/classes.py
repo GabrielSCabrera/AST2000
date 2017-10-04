@@ -1651,26 +1651,30 @@ class Satellite(object):
             'poppengo', 'trento']
         else:
             planets = list(string.ascii_lowercase[:number_of_planets])
+
         if number_of_planets % 2 == 0:
-            continue
+            pass
         else:
             del planets[-1]
+
         circles = []
         for i,n in enumerate(planets):
             circles.append(GEO.Circle(GEO.Point(self.solar_system.orbits[n](time)),dist_list[i]))
         intersections = np.zeros((len(circles),2))
+
         for i in xrange(0,len(circles),2):
             inter = np.array(GEO.intersection(circles[i],circles[i+1]))
             for k in xrange(2):
                 intersections[i+k] = inter[k]
-        fit = []
-        for i in xrange(len(intersections)):
-            for k in xrange(len(intersections)):
-                if k <= i:
-                    continue
-                fit.append(np.sum((intersections[i] - intersections[k])**2))
-        return intersections[np.where(fit==min(fit))]
 
+        pt1 = 0; pt2 = 0
+        for i in xrange(2,len(intersections)):
+            pt1 += (np.sum((intersections[0] - intersections[i])**2))
+            pt2 += (np.sum((intersections[1] - intersections[i])**2))
+        if pt1 < pt2:
+            return intersections[0]
+        else:
+            return intersections[1]
 
 class Lander(object):
 
