@@ -7,12 +7,25 @@ import matplotlib.patches as Patches
 import matplotlib.axes as Axes
 import math, itertools, string
 import numpy.linalg as LA
+import ui_tools as ui
+import sys
+import subprocess
+import ref_stars as rs
 try:
     from numba import jit
     import numba as nb
 except ImportError:
     string = "User must install module <numba> to use module <classes.py>"
     fx.error(ImportError, string)
+
+kwargs = sys.argv
+ip = ui.get_terminal_kwargs(kwargs)
+if 'get_ref_stars' in ip:
+    seed = ip['get_ref_stars']
+    scripts = rs.Scripts()
+    scripts.get_lambda_deg_from_ref_stars()
+    sys.exit(0)
+
 
 '''[2] USEFUL CONSTANTS'''
 
@@ -210,11 +223,34 @@ def get_sun_data(seed = None):
     'radius':myStarSystem.star_radius, 'temperature':myStarSystem.temperature}
     return data_dict
 
-def get_vel_from_ref_stars(l, dl):
+def get_vel_from_ref_stars(l, seed = None):
+    if seed == None:
+        seed = 45355
     c = 2.99792458e8
-    return dl*c/l
+    cmd = ['python', 'functions.py','get_ref_stars=%d'%(seed)]
+    output = subprocess.Popen(cmd, stdout=subprocess.PIPE ).communicate()[0]
+    values = []
+    for i in output.split():
+        try:
+            float(i)
+            values.append(i)
+        except:
+            continue
+    deg1 = np.deg2rad(float(values[0]))
+    dl1 = float(values[1])
+    deg2 = np.deg2rad(float(values[2]))
+    dl2 = float(values[3])
+
+    v_refstar1 = dl1*c/l
+    v_refstar2 = dl2*c/l
+
+    return  v_refstar1, deg1, v_refstar2, deg2
+
+
+
 
 
 
 if __name__ == '__main__':
-    pass
+    a = get_vel_from_ref_stars(l = 656.3)
+    print a
