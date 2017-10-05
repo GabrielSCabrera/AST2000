@@ -537,13 +537,13 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             fx.error(KeyError, 'Invalid Conversion Unit <%s>'%(convert_to))
 
     def convert_year(self, val, convert_to = 's'):
-        if convert_to == 'seconds':
+        if convert_to == 's':
             return val*3.154e+7
-        elif convert_to == 'minutes':
+        elif convert_to == 'm':
             return val*525600.
-        elif convert_to == 'hours':
+        elif convert_to == 'h':
             return val*8760.
-        elif convert_to == 'days':
+        elif convert_to == 'd':
             return val*365.2422
         else:
             fx.error(KeyError, 'Invalid Conversion Unit <%s>'%(convert_to))
@@ -870,6 +870,7 @@ class Rocket(object):
         self.initial_conditions_calculated = False
         self.liftoff_calculated = False
         self.transfer_calculated = False
+        self.circularization_calculated = False
 
         self.final_height = final_height
         self.gas_box = gas_box
@@ -908,7 +909,7 @@ class Rocket(object):
     #MAIN FUNCTIONS
 
     def run(self):
-        self.calculate_transfer()
+        self.calculate_circularization()
         print '\n', self.__str__()
         self.plot_liftoff()
         self.plot_intercept()
@@ -983,6 +984,17 @@ class Rocket(object):
         print ' -  Done (%.2fs)'%(t1-t0)
         self.transfer_calculated = True
 
+    def calculate_circularization(self):
+        self._check_transfer_calculated()
+        t0 = time.time()
+        sys.stdout.write('Circularizing Orbit Around Target')
+        sys.stdout.flush()
+        self.circularization_data = self.get_circularization_data()
+        self.target_orbit_data = self.circularize()
+        t1 = time.time()
+        print ' -  Done (%.2fs)'%(t1-t0)
+        self.circularization_calculated = True
+
     #ORBITAL DATA FUNCTIONS
 
     def get_interception_a(self, t):
@@ -992,16 +1004,20 @@ class Rocket(object):
     def get_eccentricity(self, r_a, r_p):
         return (r_a - r_p)/(r_a + r_p)
 
-    def get_periapsis_velocity(self, a, e):
-        return np.sqrt((self.k/a)*(1. + e)/(1. - e))
+    def get_periapsis_velocity(self, a, e, k = None):
+        if k == None:
+            k = self.k
+        return np.sqrt((k/a)*(1. + e)/(1. - e))
 
-    def get_orbital_period(self, a):
-        return 2.*np.pi*np.sqrt(a**3./self.k)
+    def get_orbital_period(self, a, k = None):
+        if k == None:
+            k = self.k
+        return 2.*np.pi*np.sqrt(a**3./k)
 
     def get_semi_major_axis(self, apoapsis, e):
         return apoapsis/(1. + e)
 
-    def get_orbit_data(self, x_a, x_p, start_at_apoapsis):
+    def get_orbit_data(self, x_a, x_p, start_at_apoapsis, k = None):
         '''Parameters <x_a> and <x_p> refer to the orbit's apoapsis and periapsis
         coordinates in the xy-plane. start_at_apoapsis defines whether we begin
         at the apoapsis or periapsis'''
@@ -1009,8 +1025,8 @@ class Rocket(object):
         r_p = LA.norm(x_p)
         e = self.get_eccentricity(r_a, r_p)
         a = self.get_semi_major_axis(r_a, e)
-        T = self.get_orbital_period(a)
-        v_p = self.get_periapsis_velocity(a, e)
+        T = self.get_orbital_period(a, k)
+        v_p = self.get_periapsis_velocity(a, e, k)
         if start_at_apoapsis == True:
             u = fx.unit_vector(x_a)
         elif start_at_apoapsis == False:
@@ -1139,6 +1155,23 @@ class Rocket(object):
         else:
             return utheta
 
+    def get_circularization_data(self):
+        self._check_transfer_calculated()
+        t0 = self.transfer_data['t_end']
+        x0 = self.transfer_data['x'][-1]
+        v0 = self.transfer_data['v'][-1]
+
+        xp0 = self.target.get_position_from_time(t0)
+        vp0 = self.target.get_velocity_from_time(t0)
+
+        r0 = LA.norm(x0 - xp0)
+
+        v_orbit = np.sqrt(self.target.mass*self.planet.G/r0)
+        uv_orbit = fx.rotate_vector(fx.unit_vector(x0 - xp0), np.pi/2.)
+        v_orbit = v_orbit*uv_orbit
+
+        return {'v1':vp0 + v_orbit, 'x':x0, 'v0':v0, 't':t0, 'r':r0}
+
     #LIFTOFF DATA FUNCTIONS
 
     def get_gas_boxes_required(self):
@@ -1203,6 +1236,34 @@ class Rocket(object):
         self.burns.append([t, v1 - v0])
         return v1
 
+    #TRAJECTORIES
+
+    def run_transfer(self, steps = 1e4):
+        self._check_liftoff_calculated()
+        x0 = self.liftoff_data['x'][-1]*6.68459e-12
+        v0 = self.liftoff_data['v'][-1]*0.000210805
+        t0 = self.liftoff_data['t_abs'][-1]*3.17098e-8
+
+        data = self.intercept_data
+        if data['start_at_apoapsis'] == True:
+            v0 = self.burn(t0, v0, data['v_a'])
+        else:
+            v0 = self.burn(t0, v0, data['v_p'])
+
+        T = data['T']/2.
+
+        return self.trajectory(t0, x0, v0, T, steps)
+
+    def circularize(self, steps = 1e4):
+        self._check_transfer_calculated()
+        data = self.circularization_data
+        t0 = data['t']
+        x0 = data['x']
+        v0 = self.burn(t0, data['v0'], data['v1'])
+        T = self.target.period/365.
+
+        return self.trajectory(t0, x0, v0, T, steps)
+
     #INTEGRATORS
 
     def launch_lifter(self, x0, v0, u, u_theta, v_rot, chambers = None):
@@ -1236,6 +1297,7 @@ class Rocket(object):
             v = np.copy(x)
             v_p = np.copy(x)
             t = np.linspace(0, T, steps)
+            t_abs = t + self.planet.convert_year(self.intercept_data['t'], 's')
             x[0] = x0 + radius*u
             v[0] = v0 + v_rot*u_theta
             x_p[0] = x0
@@ -1266,25 +1328,17 @@ class Rocket(object):
                     i_esc = i+1
 
             return {'t':t, 'x':x, 'v':v, 'x_p':x_p, 'v_p':v_p, 't_esc':t_esc,
-            'x_esc':x_esc, 'v_esc':v_esc, 'i_esc':i_esc}
+            'x_esc':x_esc, 'v_esc':v_esc, 'i_esc':i_esc, 't_abs':t_abs}
 
         return integration(G, planet_mass, radius, self.steps, mass, dm, F,
         self.T, dt, u, u_theta, x0, v0, v_rot, sun_mass)
 
-    def run_transfer(self, steps = 1e4):
-        self._check_liftoff_calculated()
-        x0 = self.liftoff_data['x'][-1]*6.68459e-12
-        v0 = self.liftoff_data['v'][-1]*0.000210805
-        t0 = self.liftoff_data['t'][-1]*3.17098e-8
+    def trajectory(self, t0, x0, v0, T, steps, inline_print = True):
 
-        loading_string = ' - Preparing...'
+        if inline_print == True:
+            ui.write(' - ')
+        loading_string = 'Preparing...'
         ui.write(string = loading_string)
-
-        data = self.intercept_data
-        if data['start_at_apoapsis'] == True:
-            v0 = self.burn(t0, v0, data['v_a'])
-        else:
-            v0 = self.burn(t0, v0, data['v_p'])
 
         masses = self.solar_system('mass', array = True)
         radii = self.solar_system('radius', array = True)
@@ -1302,7 +1356,7 @@ class Rocket(object):
             a = -G*self.planet.sun.mass/(LA.norm(x)**3.)
             return a*x
 
-        t_end = t0 + data['T']/2.
+        t_end = t0 + T
         dt = float(t_end)/steps
         n = 0
 
@@ -1316,7 +1370,7 @@ class Rocket(object):
             t.append(t[n] + dt)
 
             progress = (float(t[n+1])/float(t_end))*100.
-            new_string = ' - Loading (%d%%)'%(int(progress))
+            new_string = 'Loading (%d%%)'%(int(progress))
             if loading_string != new_string:
                 ui.delete_chars(len(loading_string))
                 loading_string = new_string
@@ -1324,7 +1378,10 @@ class Rocket(object):
             n += 1
 
         ui.delete_chars(len(loading_string))
-        return {'t':np.array(t), 'x':np.array(x), 'v':np.array(v)}
+        if inline_print == True:
+            ui.delete_chars(3)
+
+        return {'t':np.array(t), 'x':np.array(x), 'v':np.array(v), 't_end':t_end}
 
     #PLOTTING FUNCTIONS
 
@@ -1410,8 +1467,12 @@ class Rocket(object):
         plt.plot(x_target[0], x_target[1], '--k')
 
         if numerical == True:
-            self._check_transfer_calculated()
-            x_n = self.transfer_data['x']
+            self._check_circularization_calculated()
+            x_t = self.transfer_data['x']
+            x_c = self.target_orbit_data['x']
+            x_n = np.zeros((len(x_t) + len(x_c), 2))
+            x_n[:len(x_t)] = x_t
+            x_n[len(x_t):] = x_c
             plt.plot(x_n[:,0], x_n[:,1], '-m')
             legend.append("Probe's True Trajectory")
 
@@ -1512,6 +1573,10 @@ class Rocket(object):
     def _check_transfer_calculated(self):
         if self.transfer_calculated == False:
             self.calculate_transfer()
+
+    def _check_circularization_calculated(self):
+        if self.circularization_calculated == False:
+            self.calculate_circularization()
 
     def test_launch_simple(self):
         self._check_chambers_calculated()
