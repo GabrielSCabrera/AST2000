@@ -114,7 +114,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
 
             x[0,0], x[0,1] = x0, y0
             v[0,0], v[0,1] = vx0, vy0
-            r_magnitude = LA.norm(x[0])
+            r_magnitude = np.sqrt(np.sum(x[0]**2))
             ur = np.divide(x[0], r_magnitude)
             a[0] = (-(G*sun_mass)/(r_magnitude**2.))*ur
             t_now = dt
@@ -124,7 +124,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             save_index = 1
 
             while t_now <= T + dt:
-                r_magnitude = LA.norm(x_now)
+                r_magnitude = np.sqrt(np.sum(x_now**2.))
                 ur = np.divide(x_now, r_magnitude)
                 a_now = (-(G*sun_mass)/(r_magnitude**2.))*ur
                 v_now += a_now*dt
@@ -173,7 +173,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
 
             x[0,0], x[0,1] = x0, y0
             v[0,0], v[0,1] = vx0, vy0
-            r_magnitude = LA.norm(x[0])
+            r_magnitude = np.sqrt(np.sum(x[0]**2.))
             ur = np.divide(x[0], r_magnitude)
             a[0] = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
             t_now = dt
@@ -183,7 +183,7 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
             save_index = 1
 
             while t_now <= T + dt:
-                r_magnitude = LA.norm(x_now)
+                r_magnitude = np.sqrt(np.sum(x_now**2.))
                 ur = np.divide(x_now, r_magnitude)
                 a_now = (((G*mass)/(r_magnitude**2.))-((G*sun_mass)/(r_magnitude**2.)))*ur
                 v_now += a_now*dt
@@ -1320,8 +1320,8 @@ class Rocket(object):
                 v[i+1] = v[i] + a*dt
                 x[i+1] = x[i] + v[i+1]*dt
 
-                if v_esc is None and LA.norm(v[i+1] - v0 - v_rot*u_theta)\
-                > self.planet.get_escape_velocity(LA.norm(x[i+1]-x_p[i+1]-radius*u)):
+                if v_esc is None and np.sqrt(np.sum((v[i+1] - v0 - v_rot*u_theta)**2.))\
+                > self.planet.get_escape_velocity(np.sqrt(np.sum((x[i+1]-x_p[i+1]-radius*u)**2.))):
                     v_esc = v[i+1].copy()
                     x_esc = x[i+1].copy()
                     t_esc = t[i+1].copy()
@@ -1709,7 +1709,7 @@ class Satellite(object):
         vxy = (1./np.sin(phi_2 - phi_1))*rm*vm
         return vxy
 
-    def get_position_from_dist(self, dist_list,time):
+    def get_position_from_dist(self, dist_list, time):
         number_of_planets = self.solar_system.number_of_planets
         if self.seed == 45355:
             planets = ['sarplo', 'jevelan', 'calimno', 'sesena', 'corvee', 'bertela',
