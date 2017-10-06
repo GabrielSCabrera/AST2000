@@ -31,6 +31,11 @@ def write(string):
     sys.stdout.write(string)
     sys.stdout.flush()
 
+def write_delay(string, delay):
+    for c in string:
+        write(c)
+        pause(delay)
+
 '''INPUT'''
 
 def get_key_press(allowed = 'all', caseSensitive = False):
@@ -76,6 +81,10 @@ def select_from_menu(options, title = 'Menu', clearScreen = True):
     print(title)
     print("Select one of the following options:")
     if isinstance(options, dict):
+        for n, (k, v) in enumerate(options.iteritems()):
+            key = str(n+1)
+            print('%s) %s'%(key, options[key]))
+        return options[str(get_key_press(allowed = list(options.keys())))].lower()
         for i in range(len(options)):
             key = str(i+1)
             print('%s) %s'%(key, options[key]))
