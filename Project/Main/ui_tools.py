@@ -75,24 +75,57 @@ def get_key_press(allowed = 'all', caseSensitive = False):
     os.system("stty -raw echo")
     return key
 
-def select_from_menu(options, title = 'Menu', clearScreen = True):
+def key_to_continue(msg = 'Press Any Key to Continue', clearScreen = True):
+    print msg
+    get_key_press()
+    if clearScreen == True:
+        clear()
+
+def select_from_menu(options, title = 'Menu', clearScreen = True, quit = True,
+back = True):
     if clearScreen == True:
         clear(errorMsg = True)
     print(title)
     print("Select one of the following options:")
     if isinstance(options, dict):
-        for n, (k, v) in enumerate(options.iteritems()):
-            key = str(n+1)
-            print('%s) %s'%(key, options[key]))
-        return options[str(get_key_press(allowed = list(options.keys())))].lower()
+        copy = options.copy()
+        copy2 = options.copy()
         for i in range(len(options)):
             key = str(i+1)
-            print('%s) %s'%(key, options[key]))
-        return options[str(get_key_press(allowed = list(options.keys())))].lower()
+            val = copy.pop(key, None)
+            if val == None:
+                break
+            print('%s) %s'%(key, val))
+        for k, v in copy.iteritems():
+            copy2[k.lower()] = v
+            copy2.pop(k)
+            print('%s) %s'%(k, v))
+        if back == True:
+            print('R) Return')
+            copy2['r'] = 'return'
+        if quit == True:
+            print('Q) Quit')
+            copy2['q'] = 'quit'
+        key_press = str(get_key_press(allowed = list(copy2.keys())))
+        if key_press.lower() == 'q' and quit == True:
+            exit(clearScreen = True)
+        return copy2[key_press].lower()
     elif isinstance(options, (tuple, list)):
+        more = []
         for n,i in enumerate(options):
             print('%s) %s'%(n+1, i))
-        return int(get_key_press(allowed = list(range(1,len(options)+1))))-1
+        if quit == True:
+            print('Q) Quit')
+            more.append('q')
+        if back == True:
+            print('R) Return')
+            more.append('r')
+        key_press = get_key_press(allowed = list(range(1,len(options)+1)) + more)
+        if key_press.lower() == 'q' and quit == True:
+            exit(clearScreen = True)
+        elif key_press.lower() == 'r' and back == True:
+            return 'return'
+        return int(key_press)-1
 
 def get_input(msg = 'Input: ', types = None, minimum = None, maximum = None):
     if types == None:
@@ -112,13 +145,15 @@ def get_input(msg = 'Input: ', types = None, minimum = None, maximum = None):
             if maximum != None and string > maximum:
                 return None
             return string
-        elif int in types and int(eval(string)) - float(eval(string)) == 0.:
+        elif int in types and int(eval(string)) - float(eval(string)) == 0:
             string = int(eval(string))
-            if minimum != None and string < minimum:
+            if minimum is not None and string < minimum:
                 return None
-            if maximum != None and string > maximum:
+            if maximum is not None and string > maximum:
                 return None
             return string
+        else:
+            return None
     except:
         if bool in types and string in ['True', 'False']:
             try:
@@ -130,12 +165,12 @@ def get_input(msg = 'Input: ', types = None, minimum = None, maximum = None):
                     return None
                 else:
                     return string
-    return string
+    return None
 
 def confirm(msg = 'Proceed? (Y/N)', clearScreen = True, acceptNumber = False):
     if clearScreen == True:
         clear(errorMsg = True)
-    print msg
+    print(msg)
     if acceptNumber == False:
         result = get_key_press(allowed = 'yn')
     else:
@@ -216,7 +251,9 @@ def pause(t):
 def exit(msg = '', clearScreen = False):
     if clearScreen == True:
         clear()
-    print msg
+    if len(msg) > 0:
+        print(msg)
+    sys.exit(1)
 
 '''EXCEPTIONS'''
 
@@ -230,7 +267,7 @@ def type_error(var, types, msg = None):
         types[n] = str(i)
     if msg == None:
         msg = 'Argument <var> is of incorrect type: %s\nValid Types: '%(type(var))
-        print type(types)
+        print(type(types))
         msg +=  ','.join(types)
     error(errortype = TypeError, msg = msg)
 
@@ -244,6 +281,13 @@ def error(errortype = None, msg = None):
     else:
         raise errortype(str(msg))
     sys.exit(1)
+
+def popup(msg = 'Invalid', time = None):
+    clear()
+    if time == None:
+        time = len(msg)*0.08
+    print(msg)
+    pause(time)
 
 '''TERMINAL TOOLS'''
 
@@ -303,4 +347,4 @@ clearErrorMsg = False):
         return string
     else:
         clear(errorMsg = clearErrorMsg)
-        print string
+        print(string)
