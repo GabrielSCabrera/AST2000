@@ -1,4 +1,4 @@
-import os, sys, datetime, string, time
+import os, sys, datetime, string, time, readline
 
 os_nt = (os.name == 'nt')
 
@@ -35,6 +35,17 @@ def write_delay(string, delay):
     for c in string:
         write(c)
         pause(delay)
+
+'''STRING FUNCTIONS'''
+
+def titleize(string):
+    new = ''
+    for w in (string.strip()).split():
+        if len(w) > 1:
+            new += w[0].upper() + w[1:].lower()
+        else:
+            new += w.upper()
+    return new
 
 '''INPUT'''
 
@@ -81,51 +92,84 @@ def key_to_continue(msg = 'Press Any Key to Continue', clearScreen = True):
     if clearScreen == True:
         clear()
 
-def select_from_menu(options, title = 'Menu', clearScreen = True, quit = True,
-back = True):
-    if clearScreen == True:
+def select_from_menu(options, title = 'Menu', quit = True, back = True):
+    scroll = 0
+    while True:
         clear(errorMsg = True)
-    print(title)
-    print("Select one of the following options:")
-    if isinstance(options, dict):
-        copy = options.copy()
-        copy2 = options.copy()
-        for i in range(len(options)):
-            key = str(i+1)
-            val = copy.pop(key, None)
-            if val == None:
-                break
-            print('%s) %s'%(key, val))
-        for k, v in copy.iteritems():
-            copy2[k.lower()] = v
-            copy2.pop(k)
-            print('%s) %s'%(k, v))
-        if back == True:
-            print('R) Return')
-            copy2['r'] = 'return'
-        if quit == True:
-            print('Q) Quit')
-            copy2['q'] = 'quit'
-        key_press = str(get_key_press(allowed = list(copy2.keys())))
-        if key_press.lower() == 'q' and quit == True:
-            exit(clearScreen = True)
-        return copy2[key_press].lower()
-    elif isinstance(options, (tuple, list)):
-        more = []
-        for n,i in enumerate(options):
-            print('%s) %s'%(n+1, i))
-        if quit == True:
-            print('Q) Quit')
-            more.append('q')
-        if back == True:
-            print('R) Return')
-            more.append('r')
-        key_press = get_key_press(allowed = list(range(1,len(options)+1)) + more)
-        if key_press.lower() == 'q' and quit == True:
-            exit(clearScreen = True)
-        elif key_press.lower() == 'r' and back == True:
-            return 'return'
-        return int(key_press)-1
+        print(title + '\n')
+        needs_scroll = False
+        if isinstance(options, dict):
+            copy = options.copy()
+            copy2 = {}
+            length = len(options)
+            nums = 0
+            for i in copy.iterkeys():
+                if is_number(i):
+                    nums += 1
+            if nums > 9:
+                needs_scroll = True
+            for i in range(len(copy)):
+                j = (i+scroll)%nums
+                key = i+1
+                val = copy.pop(str(j+1), None)
+                if val == None:
+                    break
+                copy2[str(key)] = val
+                print('%s) %s'%(key, val))
+            for k, v in copy.iteritems():
+                if not is_number(k):
+                    copy2[k.lower()] = v
+                    print('%s) %s'%(k, v))
+            print('')
+            if needs_scroll == True:
+                print('N) Scroll Fwd')
+                print('B) Scroll Bck')
+                copy2['n'] = 'next'
+                copy2['b'] = 'back'
+            if back == True:
+                print('R) Return')
+                copy2['r'] = 'return'
+            if quit == True:
+                print('Q) Quit')
+                copy2['q'] = 'quit'
+            key_press = str(get_key_press(allowed = list(copy2.keys())))
+            if key_press.lower() == 'q' and quit == True:
+                exit(clearScreen = True)
+            elif key_press.lower() == 'r':
+                return 'return'
+            elif key_press.lower() == 'n' and needs_scroll == True:
+                scroll += 1
+                continue
+            elif key_press.lower() == 'b' and needs_scroll == True:
+                scroll -= 1
+                continue
+            else:
+                return copy2[key_press].lower()
+
+def scroll_menu(options):
+
+    def get_planets(scroll = 0):
+        planets = globals()['solar_system'].planet_order
+        new_list = {}
+        length = globals()['solar_system'].number_of_planets
+        elements = min(9, length)
+        for i in range(elements):
+            j = (i+scroll)%length
+            new_list[str(i+1)] = ui.titleize(planets[j])
+        new_list['N'] = 'Next'
+        new_list['B'] = 'Previous'
+        return new_list
+
+    scroll = 0
+    while True:
+        planets = get_planets(scroll)
+        sel = ui.select_from_menu(options = planets)
+        if sel == 'return':
+            break
+        elif sel == 'next':
+            scroll += 1
+        elif sel == 'previous':
+            scroll -= 1
 
 def get_input(msg = 'Input: ', types = None, minimum = None, maximum = None):
     if types == None:
@@ -315,6 +359,15 @@ def get_terminal_kwargs(argv, allArgs = False):
         return kwargs
     else:
         return kwargs, others
+
+'''CHECKERS'''
+
+def is_number(x):
+    try:
+        float(x)
+        return True
+    except:
+        return False
 
 '''LOOPS AND LOADING BARS'''
 

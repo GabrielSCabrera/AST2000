@@ -28,7 +28,7 @@ def title():
     string3 += '          ==        ==    ==   ==  ==   ==    ===   ==  ==   ==    == \n'
     string3 += '          ========  ==    ==    ====    ==     ==    ====    ==    == \n'
 
-    string4 =  '\n\n                CREATED BY ANDERS JULTON AND GABRIEL CABRERA\n'
+    string4 =  '\n\n                 CREATED BY ANDERS JULTON AND GABRIEL CABRERA\n'
     ui.clear()
     ui.write_delay(string1, 0.00004)
     ui.write_delay(string2, 0.005)
@@ -77,19 +77,15 @@ def choose_seed():
     warning_msg =  'Warning, overwriting the previous seed will clear all data;\n'
     warning_msg += 'are you sure you want to change seed? (Y/N)'
 
-    def choose_new_planets(sel):
-        if sel == True:
-            if globals()['seed'] == globals()['seeds']['gabriel']:
-                globals()['planet'] = 'sarplo'
-                globals()['target'] = 'jevelan'
-            elif globals()['seed'] == globals()['seeds']['ulrik']:
-                globals()['planet'] = 'kraid'
-                globals()['target'] = 'brinstar'
-            else:
-                globals()['planet'] = 'a'
-                globals()['target'] = 'b'
-        else:
+    def choose_new_planets(seed):
+        globals()['seed'] = seed
+        globals()['solar_system'] = cs.Solar_System(seed = globals()['seed'])
+        globals()['planet'] = globals()['solar_system'].defaults[0]
+        globals()['target'] = globals()['solar_system'].defaults[1]
+        reset_all()
+        if ui.confirm(msg = 'Use default planets? (Y/N)') == False:
             select_trajectory()
+        reset_all()
 
     while True:
         sel = ui.select_from_menu(options = seed_menu, title = "Seed Menu")
@@ -98,20 +94,15 @@ def choose_seed():
         elif sel in seeds:
             sel2 = ui.confirm(msg = warning_msg)
             if sel2 == True:
-                globals()['seed'] = seeds[sel]
-                sel3 = ui.confirm(msg = 'Use default planets? (Y/N)')
-                choose_new_planets(sel3)
-                reset_all()
+                choose_new_planets(seeds[sel])
                 break
         elif sel == 'custom':
+            ui.clear()
             new_seed = ui.get_input(msg = 'Please enter a new seed: ', types = [int])
             if new_seed is not None:
                 sel2 = ui.confirm(msg = warning_msg)
                 if sel2 == True:
-                    globals()['seed'] = new_seed
-                    sel3 = ui.confirm(msg = 'Use default planets? (Y/N)')
-                    choose_new_planets(sel3)
-                    reset_all()
+                    choose_new_planets(new_seed)
                     break
                 else:
                     continue
@@ -135,7 +126,26 @@ def reset_all():
 '''UNFINISHED FUNCTIONS'''
 
 def select_trajectory():
-    ui.error(Exception, '<select_trajectory> not yet implemented.  Fix this soon!')
+    planets = globals()['solar_system'].planet_order
+    trajectories = {}
+    for n,p in enumerate(planets):
+        trajectories[str(n+1)] = ui.titleize(p)
+    sel = ui.select_from_menu(options = trajectories, title = 'Select a Starting Planet')
+    while True:
+        sel2 = ui.select_from_menu(options = trajectories, title = 'Select a Target Planet')
+        if sel2 == sel:
+            ui.popup('Target planet cannot be same as starting planet')
+        else:
+            break
+    warning =  'Implement changes? - all previous data will be erased (Y/N)'
+    warning += '\n\nPrevious Planet: %s, Previous Target: %s'\
+    %(globals()['planet_object'].name, globals()['target_object'].name)
+    warning += '\nNew Planet: %s, New Target: %s'\
+    %(ui.titleize(sel), ui.titleize(sel2))
+    if ui.confirm(warning) == True:
+        globals()['planet'] = sel
+        globals()['target'] = sel2
+        reset_all()
 
 '''MENU OPTIONS'''
 main_menu = {'1':'Plots', '2':'Planets', '3':'Launch Rocket', 'O':'Options'}

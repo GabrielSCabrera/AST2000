@@ -599,6 +599,7 @@ class Solar_System(object):
         planet_data, self.planet_order = fx.get_planet_data(seed = self.seed, return_order = True)
         self.planets = {}
         self.orbits = {}
+        self.defaults = (self.planet_order[0], self.planet_order[1])
 
         self.dt = dt
         self.frames_max = frames_max
