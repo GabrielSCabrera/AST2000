@@ -1007,6 +1007,12 @@ class Rocket(object):
             k = self.k
         return np.sqrt((k/a)*(1. + e)/(1. - e))
 
+    def get_apoapsis_velocity(self, a, e, k = None):
+        if k == None:
+            k = self.k
+        p = a*(1.-e)
+        return np.sqrt((k/p)*(2. + e**2.))
+
     def get_orbital_period(self, a, k = None):
         if k == None:
             k = self.k
@@ -1025,17 +1031,19 @@ class Rocket(object):
         a = self.get_semi_major_axis(r_a, e)
         T = self.get_orbital_period(a, k)
         v_p = self.get_periapsis_velocity(a, e, k)
+        v_a = self.get_apoapsis_velocity(a, e, k)
         if start_at_apoapsis == True:
             u = fx.unit_vector(x_a)
         elif start_at_apoapsis == False:
             u = fx.unit_vector(x_p)
         u_tangent = fx.rotate_vector(u, np.pi/2.)
         v_p = v_p * u_tangent
+        v_a = v_a * u_tangent
         psi = np.arctan2(x_a[1], x_a[0])
         if psi < 0:
             psi += 2*np.pi
         return {'x_a':x_a, 'x_p':x_p, 'r_a':r_a, 'r_p':r_p, 'e':e, 'a':a,
-        'T':T, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
+        'T':T, 'v_a':v_a, 'v_p':v_p, 'psi':psi, 'start_at_apoapsis':start_at_apoapsis}
 
     def get_intercept_data(self, intervals = None, accuracy = 1e-8,
     final_height = None):
@@ -1169,6 +1177,7 @@ class Rocket(object):
         v_orbit = v_orbit*uv_orbit
 
         return {'v1':vp0 + v_orbit, 'x':x0, 'v0':v0, 't':t0, 'r':r0}
+
 
     #LIFTOFF DATA FUNCTIONS
 
@@ -1545,6 +1554,9 @@ class Rocket(object):
                 string += ', or (%g, %g) AU/yr'%(b[1][0], b[1][1])
 
         return string
+
+    def print_str(self):
+        print self.__str__()
 
     #TEST FUNCTIONS
 

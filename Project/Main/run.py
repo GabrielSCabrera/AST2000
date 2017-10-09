@@ -126,7 +126,7 @@ def check_current_parameters():
 
 def reset_all():
     '''Resets all currently loaded objects such that a new parameter can be used'''
-    globals()['rocket_object'] = cs.Rocket(seed = seed, planet = globals()['planet'],
+    globals()['rocket'] = cs.Rocket(seed = globals()['seed'], planet = globals()['planet'],
     target = globals()['target'])
 
 def select_trajectory():
@@ -175,9 +175,32 @@ def plot_intercept_trajectory():
         ui.clear()
     globals()['rocket'].plot_intercept()
 
-def print_data():
-    pass
+def data_printouts():
+    options = {'1':'Planet', '2':'Rocket'}
+    while True:
+        sel = ui.select_from_menu(options = options, title = 'Available Data Printouts:')
+        if sel == 'return':
+            break
+        elif sel == 'planet':
+            planets = get_planets_dict()
+            sel2 = ui.select_from_menu(options = planets, title = 'Select a Planet:')
+            if sel2 == 'return':
+                pass
+            else:
+                ui.clear()
+                print globals()['rocket'].solar_system.planets[sel2]
+            ui.key_to_continue('\nPress any key to return to menu')
+        elif sel == 'rocket':
+            ui.clear()
+            globals()['rocket'].print_str()
+            ui.key_to_continue('\nPress any key to return to menu')
 
+
+def run_whole_sim():
+    ui.clear()
+    print('Running Whole Simulation')
+    globals()['rocket'].run()
+    ui.key_to_continue('\nPress any key to return to menu')
 
 '''MENU OPTIONS'''
 main_menu = {'1':'Plots', '2':'Data Printouts', '3':'Run Whole Sim', 'O':'Options'}
@@ -186,7 +209,7 @@ plots_menu = {'1':'Solar System Orbits', '2':'Planet Orbit', '3':'Rocket Launch'
 '4':'Intercept Launch Window', '5':'Intercept Trajectory'}
 
 '''MENU LINKS'''
-main_links = {'plots':'plots', 'data printouts':print_data, 'run whole sim':'run_whole_sim',
+main_links = {'plots':'plots', 'data printouts':data_printouts, 'run whole sim':run_whole_sim,
 'options':'options'}
 options_links = {'choose seed':choose_seed, 'select trajectory':select_trajectory,
 'check current parameters':check_current_parameters}
