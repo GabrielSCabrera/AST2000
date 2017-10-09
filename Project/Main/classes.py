@@ -389,16 +389,17 @@ class Planet(object):                                   #FIX LEAPFROG ALGORITHM
     #DATA VISUALIZATION
 
     def plot(self, analytical = True, numerical = False, axes = True):
-        legend = ['Sun']
+        legend = ['Sun', 'Planet %s'%(self.name)]
         sun = plt.Circle(xy = (0.,0.), radius = self.sun.radius*6.68459e-9,
         color = 'y')
         planet = plt.Circle(xy = (self.x0,self.y0), radius = self.radius*6.68459e-9,
-        color = 'k')
+        color = 'b')
         fig, ax = plt.subplots()
         ax.set(aspect=1)
         ax.add_artist(sun)
         ax.add_artist(planet)
         plt.plot(0,0,'oy',ms=1)
+        plt.plot(self.x0,self.y0,'xm',ms=5)
 
         if analytical == True:
             self._check_analytical()
@@ -882,23 +883,19 @@ class Rocket(object):
 
         self.solar_system = Solar_System(seed = self.seed)
 
-        if planet is None and seed == 45355:
-            planet_name = 'sarplo'
-        elif planet is None:
-            planet_name = 'a'
+        if planet is None:
+            planet_name = self.solar_system.defaults[0]
         else:
             planet_name = planet
 
-        self.planet = self.solar_system.planets[planet_name]
+        self.planet = self.solar_system.planets[planet_name.lower()]
 
-        if target is None and seed == 45355:
-            target_name = 'jevelan'
-        elif target is None:
-            target_name = 'b'
+        if target is None:
+            target_name = self.solar_system.defaults[1]
         else:
             target_name = target
 
-        self.target = self.solar_system.planets[target_name]
+        self.target = self.solar_system.planets[target_name.lower()]
 
         if self.planet == self.target:
             fx.error(NameError, 'Must launch rocket from one planet to another')
@@ -1121,7 +1118,7 @@ class Rocket(object):
 
         ui.delete_chars(len(loading_string))
         orbit_data = prep_orbit_data(best_time)
-        data = {'t':best_time, 'h_final':lowest_dx - r.target.radius*6.68459e-9,
+        data = {'t':best_time, 'h_final':lowest_dx - self.target.radius*6.68459e-9,
         'x_target':best_x_target, 'x_closest':best_x}
         data.update(orbit_data)
         return data
