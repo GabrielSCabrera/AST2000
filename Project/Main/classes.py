@@ -713,6 +713,11 @@ class Solar_System(object):
 
     #DATA EXTRACTION
 
+    def __str__(self):
+        string =  'Seed: %d, Number of Planets: %d'\
+        %(self.seed, self.number_of_planets)
+        return string
+
     def __call__(self, parameter, array = False):
         if array == False:
             op = {}
@@ -789,12 +794,21 @@ class Solar_System(object):
 class Sun(object):
 
     def __init__(self, seed = 45355):
-        data = fx.get_sun_data(seed = seed)
+        self.seed = seed
+        data = fx.get_sun_data(seed = self.seed)
         self.mass = data['mass']
         self.radius = data['radius']
         self.temperature = data['temperature']
         self.sigma = 5.6703e-8
         self.L = self.sigma*(self.temperature**4.)*(4.*np.pi*((self.radius*1e3)**2.))
+
+    def __str__(self):
+        string =  'Sun Data\n'
+        string += 'Seed: %d\n'%(self.seed)
+        string += 'Mass: %g Solar Masses or %g kg'%(self.mass, self.mass*1.99e30)
+        string += '\nRadius: %g Solar Radii or %g km'%(self.radius/6.957e5, self.radius)
+        string += '\nTemperature: %g K, Luminosity: %g W'%(self.temperature, self.L)
+        return string
 
 class Gas_Box(object):
 
@@ -1617,7 +1631,7 @@ class Rocket(object):
         print self.planet.convert_AU(x_final - real)
 
     def test_launch(self):
-        self._check_chambers_calculated()
+        self._check_liftoff_calculated()
         m_to_AU = 1./149597870660.
         radius = self.planet.radius*1000.
 
@@ -1810,4 +1824,4 @@ class Gaussian(object):
 
 if __name__ == '__main__':
     r = Rocket()
-    r.run()
+    r.test_launch()

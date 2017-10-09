@@ -40,12 +40,14 @@ def write_delay(string, delay):
 
 def titleize(string):
     new = ''
-    for w in (string.strip()).split():
-        if len(w) > 1:
-            new += w[0].upper() + w[1:].lower()
+    for w in string.split():
+        v = w.strip()
+        if len(v) > 1:
+            new += v[0].upper() + v[1:].lower()
         else:
-            new += w.upper()
-    return new
+            new += v.upper()
+        new += ' '
+    return new.strip()
 
 '''INPUT'''
 
@@ -108,19 +110,18 @@ def select_from_menu(options, title = 'Menu', quit = True, back = True):
                     nums += 1
             if nums > 9:
                 needs_scroll = True
-            for i in range(len(copy)):
-                j = (i+scroll)%9
+            for i in range(9):
+                j = (i+scroll)%nums
                 key = i+1
                 val = copy.pop(str(j+1), None)
-                if val == None:
-                    break
-                copy2[str(key)] = val
-                print('%s) %s'%(key, val))
+                if val != None:
+                    copy2[str(key)] = val
+                    print('%s) %s'%(key, val))
+            print('')
             for k, v in copy.iteritems():
                 if not is_number(k):
                     copy2[k.lower()] = v
                     print('%s) %s'%(k, v))
-            print('')
             if needs_scroll == True:
                 print('N) Scroll Fwd')
                 print('B) Scroll Bck')

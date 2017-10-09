@@ -1,6 +1,7 @@
 import functions as fx
 import ui_tools as ui
 import classes as cs
+import numpy as np
 import types
 
 '''VITAL ONE TIME FUNCTIONS'''
@@ -176,25 +177,82 @@ def plot_intercept_trajectory():
     globals()['rocket'].plot_intercept()
 
 def data_printouts():
-    options = {'1':'Planet', '2':'Rocket'}
+    options = {'1':'Solar System', '2':'Sun', '3':'Planet', '4':'Data Charts', '5':'Rocket'}
+
+    chart_options = {'1':'Semi-Major Axis', '2':'Eccentricity', '3':'Radius',
+    '4':'Angle of Semi-Major Axis', '5':'Mass', '6':'Day Length',
+    '7':'Surface Atmosphere Density', '8':'Semi-Minor Axis',
+    '9':'Orbital Period', '10':'Surface Temperature', '11':'Apoapsis',
+    '12':'Periapsis'}
+
     while True:
         sel = ui.select_from_menu(options = options, title = 'Available Data Printouts:')
         if sel == 'return':
             break
+        elif sel == 'solar system':
+            ui.clear()
+            print globals()['rocket'].solar_system
+            ui.key_to_continue('\nPress any key to return to menu')
+        elif sel == 'sun':
+            ui.clear()
+            print globals()['rocket'].solar_system.sun
+            ui.key_to_continue('\nPress any key to return to menu')
         elif sel == 'planet':
             planets = get_planets_dict()
             sel2 = ui.select_from_menu(options = planets, title = 'Select a Planet:')
             if sel2 == 'return':
-                pass
+                break
             else:
                 ui.clear()
                 print globals()['rocket'].solar_system.planets[sel2]
-            ui.key_to_continue('\nPress any key to return to menu')
+                ui.key_to_continue('\nPress any key to return to menu')
+        elif sel == 'data charts':
+            while True:
+                sel3 = ui.select_from_menu(options = chart_options,
+                title = 'Available Data Charts')
+                if sel3 == 'return':
+                    break
+                else:
+                    ui.clear()
+                    get_chart(sel3)
+                    ui.key_to_continue('\nPress any key to return to menu')
         elif sel == 'rocket':
             ui.clear()
             globals()['rocket'].print_str()
             ui.key_to_continue('\nPress any key to return to menu')
 
+def get_chart(option):
+    variables = {'semi-major axis':'a', 'eccentricity':'e', 'radius':'radius',
+    'angle of semi-major axis':'psi', 'mass':'mass', 'day length':'period',
+    'surface atmosphere density':'rho0', 'semi-minor axis':'b',
+    'orbital period':'T', 'surface temperature':'temperature',
+    'apoapsis':'apoapsis', 'periapsis':'periapsis'}
+
+    units = {'semi-major axis':'AU', 'eccentricity':'', 'radius':'km',
+    'angle of semi-major axis':'rads', 'mass':'Solar Masses',
+    'day length':'Earth Days', 'surface atmosphere density':'kg/m^3',
+    'semi-minor axis':'AU', 'orbital period':'yrs', 'surface temperature':'K',
+    'apoapsis':'AU', 'periapsis':'AU'}
+
+    print 'Data Chart - %s of Each Planet in Solar System %d\n'\
+    %(ui.titleize(option), globals()['seed'])
+
+    longest_p = 0
+    longest_s = 0
+    for p,v in globals()['rocket'].solar_system.__call__(variables[option]).iteritems():
+        if len(p) > longest_p:
+            longest_p = len(p)
+        s = '%g %s'%(v, units[option])
+        if len(s)+1 > longest_s:
+            longest_s = len(s)+1
+
+    for p,v in globals()['rocket'].solar_system.__call__(variables[option]).iteritems():
+        if option == 'angle of semi-major axis':
+            print '%*s |'%(longest_p + 2, ui.titleize(p)),\
+            '%*g'%(longest_s-5, v/np.pi)+ u'\u03C0', ' %s'%(units[option])
+        else:
+            s = '%g %s'%(v, units[option])
+            print '%*s |%*s'%(longest_p + 2, ui.titleize(p), longest_s + 1, str(s))
 
 def run_whole_sim():
     ui.clear()
