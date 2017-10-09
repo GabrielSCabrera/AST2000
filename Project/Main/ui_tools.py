@@ -109,7 +109,7 @@ def select_from_menu(options, title = 'Menu', quit = True, back = True):
             if nums > 9:
                 needs_scroll = True
             for i in range(len(copy)):
-                j = (i+scroll)%nums
+                j = (i+scroll)%9
                 key = i+1
                 val = copy.pop(str(j+1), None)
                 if val == None:
@@ -145,31 +145,6 @@ def select_from_menu(options, title = 'Menu', quit = True, back = True):
                 continue
             else:
                 return copy2[key_press].lower()
-
-def scroll_menu(options):
-
-    def get_planets(scroll = 0):
-        planets = globals()['solar_system'].planet_order
-        new_list = {}
-        length = globals()['solar_system'].number_of_planets
-        elements = min(9, length)
-        for i in range(elements):
-            j = (i+scroll)%length
-            new_list[str(i+1)] = ui.titleize(planets[j])
-        new_list['N'] = 'Next'
-        new_list['B'] = 'Previous'
-        return new_list
-
-    scroll = 0
-    while True:
-        planets = get_planets(scroll)
-        sel = ui.select_from_menu(options = planets)
-        if sel == 'return':
-            break
-        elif sel == 'next':
-            scroll += 1
-        elif sel == 'previous':
-            scroll -= 1
 
 def get_input(msg = 'Input: ', types = None, minimum = None, maximum = None):
     if types == None:
