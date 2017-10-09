@@ -164,7 +164,16 @@ def plot_rocket_launch():
     if not globals()['rocket'].liftoff_calculated:
         ui.clear()
     globals()['rocket'].plot_liftoff()
-    pass
+
+def plot_intercept_launch_window():
+    if not globals()['rocket'].transfer_calculated:
+        ui.clear()
+    globals()['rocket'].plot_intercept(numerical = False)
+
+def plot_intercept_trajectory():
+    if not globals()['rocket'].circularization_calculated:
+        ui.clear()
+    globals()['rocket'].plot_intercept()
 
 def print_data():
     pass
@@ -174,7 +183,7 @@ def print_data():
 main_menu = {'1':'Plots', '2':'Data Printouts', '3':'Run Whole Sim', 'O':'Options'}
 options_menu = {'1':'Choose Seed', '2':'Select Trajectory', '3':'Check Current Parameters'}
 plots_menu = {'1':'Solar System Orbits', '2':'Planet Orbit', '3':'Rocket Launch',
-'4':'Target Planet Intercept'}
+'4':'Intercept Launch Window', '5':'Intercept Trajectory'}
 
 '''MENU LINKS'''
 main_links = {'plots':'plots', 'data printouts':print_data, 'run whole sim':'run_whole_sim',
@@ -182,7 +191,9 @@ main_links = {'plots':'plots', 'data printouts':print_data, 'run whole sim':'run
 options_links = {'choose seed':choose_seed, 'select trajectory':select_trajectory,
 'check current parameters':check_current_parameters}
 plots_links = {'solar system orbits':plot_solar_system_orbits,
-'planet orbit':plot_planet_orbit, 'rocket launch':plot_rocket_launch,'target planet intercept':'TEMP'}
+'planet orbit':plot_planet_orbit, 'rocket launch':plot_rocket_launch,
+'intercept launch window':plot_intercept_launch_window,
+'intercept trajectory':plot_intercept_trajectory}
 
 '''DATA DICTS'''
 seeds = {'gabriel':45355, 'anders':28631, 'ulrik':82275}
