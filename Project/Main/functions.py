@@ -223,10 +223,11 @@ def get_sun_data(seed = None):
     'radius':myStarSystem.star_radius, 'temperature':myStarSystem.temperature}
     return data_dict
 
-def get_vel_from_ref_stars(l, seed = None):
+def get_vel_from_ref_stars(seed = None):
     if seed == None:
         seed = 45355
     c = 2.99792458e8
+    l= 656.3
     cmd = ['python', 'functions.py','get_ref_stars=%d'%(seed)]
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE ).communicate()[0]
     values = []
@@ -246,10 +247,62 @@ def get_vel_from_ref_stars(l, seed = None):
 
     return  v_refstar1, deg1, v_refstar2, deg2
 
+def get_gas_data():
+    """
+    Creates dictionary which contains mass of molecules and index in spectrum array for the spectral lines of each molecule
+    """
 
+    spectrum= np.load('spectrum.npy')
 
+    pm= 1.67e-27
+    m_O= 16*pm
+    m_H= pm
+    m_C= 12*pm
 
+    m_O2= 2*m_O
+    m_H2O= 2*m_H + m_O
+    m_CO2= m_C + 2*m_O
+    m_CH4= m_C + 4*m_H
+    m_CO= m_O + m_C
+    m_N2O= 14*pm + m_O
 
+    O2_1= (np.abs(spectrum[:,0] - 630)).argmin()
+    O2_2= (np.abs(spectrum[:,0] - 690)).argmin()
+    O2_3= (np.abs(spectrum[:,0] - 760)).argmin()
+    O2= [m_O2, O2_1, O2_2, O2_3]
+
+    H2O_1= (np.abs(spectrum[:,0] - 720)).argmin()
+    H2O_2= (np.abs(spectrum[:,0] - 820)).argmin()
+    H2O_3= (np.abs(spectrum[:,0] - 940)).argmin()
+    H2O= [m_H2O, H2O_1, H2O_2, H2O_3]
+
+    CO2_1= (np.abs(spectrum[:,0] - 1400)).argmin()
+    CO2_2= (np.abs(spectrum[:,0] - 1600)).argmin()
+    CO2= [m_CO2, CO2_1, CO2_2,0]
+
+    CH4_1 = (np.abs(spectrum[:,0] - 1660)).argmin()
+    CH4_2 = (np.abs(spectrum[:,0] - 2200)).argmin()
+    CH4= [m_CH4, CH4_1, CH4_2, 0]
+
+    CO= (np.abs(spectrum[:,0] - 2340)).argmin()
+    CO= [m_CO, CO,0,0]
+
+    N2O= (np.abs(spectrum[:,0] - 2870)).argmin()
+    N2O= [m_N2O, N2O,0,0]
+
+    mol= [O2,H2O,CO2,CH4,CO,N2O]
+
+    molecules= ['O2', 'H2O', 'CO2', 'CH4', 'CO', 'N2O']
+    props= ['mass', 'lambda_1', 'lambda_2', 'lambda_3']
+
+    gases_dict= {}
+    for n,i in enumerate(molecules):
+        gases_dict[i]= {}
+        for m,p in enumerate(props):
+            gases_dict[i][p] = mol[n][m]
+            if mol[n][m] == 0:
+                del gases_dict[i][p]
+    return gases_dict
 
 if __name__ == '__main__':
     a = get_vel_from_ref_stars(l = 656.3)

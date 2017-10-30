@@ -2,11 +2,13 @@ from ast2000solarsystem_27_v4 import AST2000SolarSystem as A2000
 import functions as fx
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 from numpy import linalg as LA
 from scipy import interpolate as INTER
 import sympy.geometry as GEO
 import ui_tools as ui
 import time, sys, os, math
+from multiprocessing import Process
 try:
     from numba import jit
     import numba as nb
@@ -1688,13 +1690,16 @@ class Satellite(object):
         self.cs_area = cs_area
         self.solar_system = Solar_System()
         self.seed = seed
+        self.c= 299792458.
+        self.k= 1.38064852e-23
+        self.gases_dict= fx.get_gas_data()
+        self.noise_sigma= np.load('noise_sigma.npy')
+        self.spectrum= np.load('spectrum.npy')
 
     def take_pictures(self, a_phi = 70, a_theta = 70, theta0 = (np.pi/2)):
         a_phi = np.deg2rad(a_phi)
         a_theta = np.deg2rad(a_theta)
-        inFile = open('himmelkule.npy', 'rb')
-        himmelkulen = np.load(inFile)
-        inFile.close()
+        sky_sphere = np.load('himmelkule.npy')
         x_max = (2*np.sin(a_phi/2))/(1+np.cos(a_phi/2))
         x_min = -(2*np.sin(a_phi/2))/(1+np.cos(a_phi/2))
         y_max = (2*np.sin(a_theta/2))/(1+np.cos(a_theta/2))
@@ -1714,23 +1719,25 @@ class Satellite(object):
             for n,(i,v) in enumerate(zip(theta, phi)):
                 for m,(k,w) in enumerate(zip(i,v)):
                     pixnum = A2000.ang2pix(k,w)
-                    temp = himmelkulen[pixnum]
+                    temp = sky_sphere[pixnum]
                     projections[j][n][m] = (temp[2], temp[3], temp[4])
-        return projections
+        np.save('projections.npy', projections)
 
-    def get_orientation_phi(self, picture):
-        projections = take_pictures()
+    def get_orientation_phi(self, picture= None):
+        image= Image.open('find_orient.png')
+        picture= np.array(image)
+        projections = self.take_pictures()
         fit = np.zeros(360)
         for i in range(359):
             fit[i] = np.sum((projections[i] - picture)**2)
         phi = np.where(fit==min(fit))
-        return phi
+        print phi
 
-    def get_velocity(self, l = 656.3):
-        v_refstar1, phi_1, v_refstar2, phi_2 = fx.get_vel_from_ref_stars(l, seed = None)
-        rm = np.matrix([[np.sin(phi_2), -np.sin(phi_1)], [-np.cos(phi_2), np.cos(phi_1)]])
-        vm = np.matrix([[v_refstar1], [v_refstar2]])
-        vxy = (1./np.sin(phi_2 - phi_1))*rm*vm
+    def get_velocity(self):
+        v_refstar1, phi_1, v_refstar2, phi_2= fx.get_vel_from_ref_stars(seed= None)
+        rm= np.matrix([[np.sin(phi_2), -np.sin(phi_1)], [-np.cos(phi_2), np.cos(phi_1)]])
+        vm= np.matrix([[v_refstar1], [v_refstar2]])
+        vxy= (1./np.sin(phi_2 - phi_1))*rm*vm
         return vxy
 
     def get_position_from_dist(self, dist_list, time):
@@ -1765,6 +1772,76 @@ class Satellite(object):
         else:
             return intersections[1]
 
+    def get_lambda_doppler(self, l, v):     #Need to add velocity relative to target planet
+        return l/(1 + v/self.c)
+
+    def get_fmin_lc(self, i):
+        fmin = np.amin(self.spectrum[i-100:i+100,1])
+        lc_i= int(np.where(self.spectrum[:,1] == fmin)[0])
+        lc = float(self.spectrum[lc_i,0])
+        return fmin, lc, lc_i
+
+    def get_sigma(self, l, m, T):
+        return (2*l/self.c)*np.sqrt(2*self.k*T/m)
+
+    def get_full_comb(self, l, m, T0= 150, T1= 450, lc_lim=300):
+        fmin, lc, lc_i= self.get_fmin_lc(l)
+        fmin_a= np.linspace(fmin, 1, 30)
+        sigma_a= np.linspace(self.get_sigma(lc, m, T0), self.get_sigma(lc, m, T1), 30)
+        lc_a= self.spectrum[lc_i-lc_lim/2:lc_i+lc_lim/2, 0]
+        lc_i= np.linspace(lc_i-lc_lim/2,lc_i+lc_lim/2,lc_lim+1, dtype=int)
+        return np.array(np.meshgrid(fmin_a, sigma_a, lc_a)).T.reshape(-1,3), lc_i
+
+    def get_flux_model(self, l, fmin, sigma, lc):
+        fm= (1 + (fmin - 1)*np.exp((-(l - lc)**2)/(2*sigma**2)))
+        return fm
+
+    def get_flux_obv(self, i):
+        if isinstance(i, np.ndarray):
+            return self.spectrum[i[0]:i[-1],1]
+        else:
+            return self.spectrum[i,1]
+
+    def get_noise_sigma(self, i):
+        if isinstance(i, np.ndarray):
+            return self.noise_sigma[i[0]:i[-1],1]
+        else:
+            return self.noise_sigma[i,1]
+
+    def get_atmo_temp(self, h):
+        return 450*np.exp(-h/10000.)
+
+    def plot(self, l= None, limit= 150, lc= None):
+        plt.figure(figsize=(25,15))
+        lc_line= (np.abs(self.spectrum[:,0] - lc)).argmin()
+        plt.plot(self.spectrum[l-limit:l+limit,0], self.spectrum[l-limit:l+limit,1])
+        plt.axvline(x=self.spectrum[l,0], color='r')
+        plt.axvline(x=self.spectrum[lc_line,0], color='g')
+        plt.show()
+
+    def check_for_line(self, mol):          #Need to add multiple lambdas
+        comb, lc_i= self.get_full_comb(mol, m_N2O)
+        df= np.zeros(len(comb))
+
+        for i in xrange(len(comb)):
+            df[i] = np.sum((1/self.get_noise_sigma(lc_i))*(self.get_flux_obv(lc_i) - \
+            self.get_flux_model(self.spectrum[lc_i[0]:lc_i[-1],0]\
+            , comb[i,0], comb[i,1], comb[i,2]))**2)
+
+        if np.shape(np.where(df == np.amin(df)))[1] > 1:
+            print "No line present"
+        else:
+            self.plot(l= N2O, lc= comb[np.where(df == np.amin(df)),2])
+
+    def get_mean_mol_weight(self, l):
+        mu= 0
+        m_H= 1.67e-27
+        for n,i in enumerate(l):
+            mu += (1./len(i))*(self.gases_dict[i]['mass']/m_H)
+        mu *= (1./len(i))
+        return mu
+
+
 class Lander(object):
 
     def __init__(self, planet, mass = 90., cs_area = 6.2, watts = 40.,
@@ -1779,6 +1856,8 @@ class Lander(object):
 
     def get_min_panel_size(self):
         return self.watts/(self.planet.F*self.panel_efficiency)
+
+
 
 class Gaussian(object):
 
@@ -1824,4 +1903,19 @@ class Gaussian(object):
 
 if __name__ == '__main__':
     r = Rocket()
+    #s= Satellite()
+    #s.take_pictures()
     r.test_launch()
+    a = Process(target= r.planet.system.send_satellite,args=('sat_commands.txt',))
+    a.start()
+    while not os.path.isfile('find_orient.png'):
+        time.sleep(0.1)
+    else:
+        a.terminate()
+    #try:
+#        r.planet.system.send_satellite('sat_commands.txt')
+#    except SystemExit:
+#        print 'Yo'
+    #s.get_orientation_phi()
+    print 'worked'
+    #r.planet.system.send_satellite('sat_commands.txt')
