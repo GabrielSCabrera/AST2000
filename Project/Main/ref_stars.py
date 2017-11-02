@@ -4,7 +4,7 @@ class Scripts(object):
 
     def __init__(self, seed = None):
         if seed == None:
-            seed = 45360
+            seed = 45355
         self.mySolarSystem = A2000(seed)
 
     def get_lambda_deg_from_ref_stars(self):
