@@ -1,5 +1,7 @@
 '''[1] MODULES'''
 from ast2000solarsystem_27_v4 import AST2000SolarSystem
+from PIL import Image
+import sympy.geometry as GEO
 import numpy as np
 import matplotlib.pylab as plt
 import matplotlib.pyplot as plt2
@@ -8,9 +10,10 @@ import matplotlib.axes as Axes
 import math, itertools, string
 import numpy.linalg as LA
 import ui_tools as ui
-import sys
+import sys, os, time
 import subprocess
 import ref_stars as rs
+import classes as cl
 try:
     from numba import jit
     import numba as nb
@@ -24,8 +27,6 @@ if 'get_ref_stars' in ip:
     seed = ip['get_ref_stars']
     scripts = rs.Scripts()
     scripts.get_lambda_deg_from_ref_stars()
-    sys.exit(0)
-
 
 '''[2] USEFUL CONSTANTS'''
 
@@ -223,11 +224,10 @@ def get_sun_data(seed = None):
     'radius':myStarSystem.star_radius, 'temperature':myStarSystem.temperature}
     return data_dict
 
-def get_vel_from_ref_stars(seed = None):
-    if seed == None:
-        seed = 45355
-    c = 2.99792458e8
+def get_vel_from_ref_stars(dl3, dl4):
+    c = 3e8
     l= 656.3
+
     cmd = ['python', 'functions.py','get_ref_stars=%d'%(seed)]
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE ).communicate()[0]
     values = []
@@ -237,16 +237,78 @@ def get_vel_from_ref_stars(seed = None):
             values.append(i)
         except:
             continue
-    deg1 = np.deg2rad(float(values[0]))
+    phi_1 = np.deg2rad(float(values[0]))
     dl1 = float(values[1])
-    deg2 = np.deg2rad(float(values[2]))
+    phi_2 = np.deg2rad(float(values[2]))
     dl2 = float(values[3])
 
     v_refstar1 = dl1*c/l
     v_refstar2 = dl2*c/l
+    v_sat_1= dl3*c/l
+    v_sat_2= dl4*c/l
 
-    return  v_refstar1, deg1, v_refstar2, deg2
+    v_rel_1= v_refstar1 - v_sat_1
+    v_rel_2= v_refstar2 - v_sat_2
 
+    rm= np.matrix([[np.sin(phi_2), -np.sin(phi_1)], [-np.cos(phi_2), np.cos(phi_1)]])
+    vm= np.matrix([[v_rel_1], [v_rel_2]])
+    vxy= ((1./np.sin(phi_2 - phi_1))*rm*vm)*0.000210945021
+
+    print "Calculated x-component of velocity: %g" %(vxy[0])
+    print "Calculated y-component of velocity: %g" %(vxy[1])
+
+
+def get_orientation_phi():
+    while not os.path.isfile('find_orient.png'):
+        time.sleep(0.1)
+    else:
+        time.sleep(5)
+        image= Image.open('find_orient.png')
+        picture= np.array(image)
+        projections = np.load('projections.npy')
+        fit = np.zeros(360)
+        for i in range(359):
+            fit[i] = np.sum((projections[i] - picture)**2)
+        phi = fit.argmin()
+        print "Calculated phi = %g. Enter this value into main terminal" %(phi)
+        os.remove('find_orient.png')
+
+def get_position_from_dist():
+    while not os.path.isfile('pos.npy'):
+        time.sleep(0.1)
+    else:
+        time.sleep(5)
+        planets= []
+        with open('planets.txt', 'r') as infile:
+            planets= infile.read().split(' ')
+        coords= np.load('coords.npy')
+        dist_list= np.load('pos.npy')
+        circles = []
+        for i,n in enumerate(planets):
+            circles.append(GEO.Circle(GEO.Point(coords[i]),dist_list[i]))
+        intersections = np.zeros((len(circles),2))
+
+        for i in xrange(0,len(circles)-3,2):
+            inter = np.array(GEO.intersection(circles[i],circles[i+1]))
+            for k in xrange(2):
+                intersections[i+k] = inter[k]
+
+        pt1 = 0; pt2 = 0
+        for i in xrange(2,len(intersections)):
+            pt1 += (np.sum((intersections[0] - intersections[i])**2))
+            pt2 += (np.sum((intersections[1] - intersections[i])**2))
+        if pt1 < pt2:
+            print "Calculated x-coordinate: %g" %(intersections[0,0])
+            print "Calculated y-coordinate: %g" %(intersections[0,1])
+            print "Enter these values into main terminal"
+        else:
+            print "Calculated x-coordinate: %g" %(intersections[1,0])
+            print "Calculated y-coordinate: %g" %(intersections[1,1])
+            print "Enter these values into main terminal"
+
+        os.remove('coords.npy')
+        os.remove('pos.npy')
+        os.remove('planets.txt')
 def get_gas_data():
     """
     Creates dictionary which contains mass of molecules and index in spectrum array for the spectral lines of each molecule
@@ -304,6 +366,19 @@ def get_gas_data():
                 del gases_dict[i][p]
     return gases_dict
 
-if __name__ == '__main__':
-    a = get_vel_from_ref_stars(l = 656.3)
-    print a
+
+if 'get_orient' in kwargs:
+    print 'This is a terminal for calculating orientation, velocity and position of satelitte'
+    print 'Satelitte is taking a picture, please wait...'
+    get_orientation_phi()
+    print '\nCalculate velocity:'
+    print 'Please enter lambda shift from first reference planet, read from the main terminal:'
+    l1= float(raw_input())
+    print 'Please enter lambda shift from second reference planet, read from the main terminal:'
+    l2= float(raw_input())
+    get_vel_from_ref_stars(l1, l2)
+    print '\nCalculating position, please wait...'
+    get_position_from_dist()
+    print 'Press any key to terminate program'
+    raw_input()
+    sys.exit(0)
