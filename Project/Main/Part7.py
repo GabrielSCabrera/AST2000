@@ -15,15 +15,60 @@ class Planet_Landing(object):
         self.M= planet.mass*1.99e30
         self.G= 6.674e-11
         self.R= planet.radius*1e3
-        self.rho0
+        self.rho0= planet.rho0
         self.A_parachute= (2.*self.G*self.M*self.m)/(9.*self.R**2*rho0)
+        self.initialize_atmospheric_density()
+
+    def initialize_atmospheric_density(self):
+        mu= 36.7
+        T0= 418.
+        m_H= 1.67e-27
+        m_planet= self.M
+        k= 1.38064852e-23
+        G= self.G
+        planet_radius= self.R
+        g= G*m_planet/planet_radius**2
+        rho0= self.rho0
+        P0= (rho0*k*T0)/(m_H*mu)
+        gamma= 1.4
+
+        @jit(cache= True, nopython=True)
+        def integrate_rho():
+            dh= 0.01
+            h= 0
+            T= T0
+            P= P0
+            Rho= [rho0]
+            Rho_n= rho0
+            H= [0.]
+            M= m_planet
+            i= 0
+            while Rho_n > 1e-2:
+                g= G*M/(planet_radius + h)**2
+                h0= k*T/(mu*g*m_H)
+                M+= (4./3)*Rho_n
+                if T > T0/2.:
+                    T= T0*(1 - (gamma - 1)*h/(gamma*h0))
+                    P= P0*(1 - h/(3.5*h0))**(3.5)
+                    Rho_n= rho0*(1 - h/(3.5*h0))**(2.5)
+                elif T <= T0/2.:
+                    T= T0/2.
+                    P= P0*np.exp(-h/h0)
+                    Rho_n= rho0*np.exp(-h/h0)
+                i+= 1
+                h+= dh
+                Rho.append(Rho_n)
+                H.append(h)
+            return np.array(H), np.array(Rho)
+
+        h, rho= integrate_rho()
+        self.rho_inter= INTER.interp1d(h, rho, bounds_error= False, fill_value= 'extrapolate')
 
     def atmospheric_density(self, r):
         '''
-            --TO BE COMPLETED--
             Returns the atmospheric density in kg/m^3 at an altitude r
         '''
-        return None
+        return self.rho_inter(r)
 
     def wind_speed(self, r, x):
         v_abs= r/(self.period*2.*np.pi)
