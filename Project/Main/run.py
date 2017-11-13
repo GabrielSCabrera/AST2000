@@ -4,6 +4,11 @@ import classes as cs
 import numpy as np
 import types
 
+if len(sys.argv) > 1 and sys.argv[1] == 'dev':
+    devmode= True
+else:
+    devmode= False
+
 '''VITAL ONE TIME FUNCTIONS'''
 
 def title():

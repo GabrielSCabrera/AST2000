@@ -1,5 +1,5 @@
 '''[1] MODULES'''
-from ast2000solarsystem_27_v4 import AST2000SolarSystem
+from ast2000solarsystem_27_v5 import AST2000SolarSystem
 from PIL import Image
 import sympy.geometry as GEO
 import numpy as np
@@ -227,6 +227,7 @@ def get_sun_data(seed = None):
 def get_vel_from_ref_stars(dl3, dl4):
     c = 3e8
     l= 656.3
+    seed= 45355
 
     cmd = ['python', 'functions.py','get_ref_stars=%d'%(seed)]
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE ).communicate()[0]
@@ -237,13 +238,13 @@ def get_vel_from_ref_stars(dl3, dl4):
             values.append(i)
         except:
             continue
-    phi_1 = np.deg2rad(float(values[0]))
-    dl1 = float(values[1])
-    phi_2 = np.deg2rad(float(values[2]))
+    phi_1= np.deg2rad(float(values[0]))
+    dl1= float(values[1])
+    phi_2= np.deg2rad(float(values[2]))
     dl2 = float(values[3])
 
-    v_refstar1 = dl1*c/l
-    v_refstar2 = dl2*c/l
+    v_refstar1= dl1*c/l
+    v_refstar2= dl2*c/l
     v_sat_1= dl3*c/l
     v_sat_2= dl4*c/l
 
@@ -256,7 +257,6 @@ def get_vel_from_ref_stars(dl3, dl4):
 
     print "Calculated x-component of velocity: %g" %(vxy[0])
     print "Calculated y-component of velocity: %g" %(vxy[1])
-
 
 def get_orientation_phi():
     while not os.path.isfile('find_orient.png'):
@@ -309,6 +309,7 @@ def get_position_from_dist():
         os.remove('coords.npy')
         os.remove('pos.npy')
         os.remove('planets.txt')
+
 def get_gas_data():
     """
     Creates dictionary which contains mass of molecules and index in spectrum array for the spectral lines of each molecule
